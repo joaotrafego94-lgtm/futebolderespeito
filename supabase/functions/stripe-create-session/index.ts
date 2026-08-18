@@ -77,7 +77,9 @@ Deno.serve(async (req) => {
   params.set("client_reference_id", playerId);
   params.set("success_url", successUrl);
   params.set("cancel_url", cancelUrl);
-  params.set("automatic_payment_methods[enabled]", "true");
+  // Sem "payment_method_types", o Checkout Session já mostra sozinho
+  // os métodos ativos na conta (MB Way, Cartão, Klarna, Bancontact...)
+  // -- é o comportamento padrão da API, não precisa pedir de propósito.
   params.set("line_items[0][quantity]", "1");
   params.set("line_items[0][price_data][currency]", "eur");
   params.set("line_items[0][price_data][unit_amount]", String(Math.round(price * 100)));
