@@ -1,53 +1,68 @@
 # Futebol de Respeito
 
-App para organizar a pelada de domingo: lista de jogadores, controlo de pagamentos (IBAN / MB Way) e sorteio de 3 equipas.
+App para organizar a pelada de domingo: lista de convocados, suplentes automáticos, controlo de pagamentos (IBAN / MB Way) e sorteio de três equipas.
 
-Site estático (`index.html`), sem processo de build — corre diretamente no browser.
+Site estático, sem processo de build. Corre direto no browser.
 
-## Deploy no Vercel (via GitHub)
+**No ar:** https://futebolderespeito.vercel.app
 
-1. Cria um repositório vazio no GitHub chamado `futebolderespeito`
-2. Neste diretório:
-   ```bash
-   git init
-   git add .
-   git commit -m "Primeiro commit"
-   git branch -M main
-   git remote add origin https://github.com/<o-teu-user>/futebolderespeito.git
-   git push -u origin main
-   ```
-3. Em vercel.com -> **Add New Project** -> importa o repositório `futebolderespeito`
-4. Deploy automático — sem configuração adicional necessária (é um site estático)
-5. Cada `git push` depois disto atualiza o site sozinho
+---
+
+## Como funciona
+
+- **Um jogo de cada vez.** A app mostra sempre o próximo jogo com data igual ou posterior a hoje. Toda a gente que abre o link vê o mesmo jogo, a mesma hora e a mesma lista.
+- **Cada um entra sozinho.** Quem abre escreve o nome e carrega em Entrar. O telemóvel guarda quem é, e a partir daí a app trata a pessoa pelo nome e destaca a linha dela.
+- **Suplentes automáticos.** Quem entra depois de as vagas esgotarem fica em Suplentes, por ordem de chegada. Ninguém tem de gerir a fila à mão.
+- **Sorteio partilhado.** As equipas sorteadas ficam guardadas no jogo, por isso aparecem iguais no telemóvel de todos.
+- **Uma mensagem para o WhatsApp.** O botão copia a lista já formatada, com convocados, suplentes, equipas, quanto falta pagar e o IBAN.
+
+---
 
 ## Ativar a lista partilhada (Supabase)
 
-Sem isto, a lista de jogadores fica guardada só no telemóvel de cada pessoa (localStorage). Com Supabase, todos veem e editam a mesma lista em tempo real.
+Sem isto a app funciona, mas guarda tudo só no telemóvel de quem a abriu — cada pessoa vê a sua lista. Com o Supabase ligado, todos veem e editam a mesma, em tempo real.
 
 1. Cria um projeto grátis em [supabase.com](https://supabase.com)
-2. Vai a **SQL Editor** e corre o conteúdo de `supabase/schema.sql` (cria a tabela `players` e ativa a partilha em tempo real)
-3. Vai a **Project Settings -> API** e copia:
-   - `Project URL`
-   - `anon public key`
-4. Abre `index.html` e substitui no topo do `<script type="text/babel">`:
+2. Vai a **SQL Editor**, cola o conteúdo de `supabase/schema.sql` e corre. Cria as tabelas `games` e `players`, as políticas de acesso e o tempo real.
+3. Vai a **Project Settings → API** e copia o `Project URL` e a `anon public key`
+4. Abre `index.html` e preenche, logo a seguir ao comentário CONFIGURAÇÃO:
    ```js
-   const SUPABASE_URL = "COLOCAR_AQUI";       // -> o teu Project URL
-   const SUPABASE_ANON_KEY = "COLOCAR_AQUI";  // -> a tua anon key
+   const SUPABASE_URL = "COLOCAR_AQUI";
+   const SUPABASE_ANON_KEY = "COLOCAR_AQUI";
    ```
-5. Commit + push — o Vercel atualiza sozinho
+5. `git push` — o Vercel publica sozinho
 
-Sem estes dois valores preenchidos, a app funciona na mesma (fallback automático para localStorage).
+A `anon key` é pública por natureza: vai dentro do HTML e qualquer pessoa a consegue ler. A segurança está nas políticas do `schema.sql`, que permitem escrever a quem tiver o link. Para um grupo de amigos com um link que não se divulga, chega. Se um dia isto passar a ser público, troca as políticas por políticas com autenticação.
+
+---
+
+## Dados do grupo
+
+No topo do `<script type="module">` em `index.html`:
+
+| Constante | O que é |
+|---|---|
+| `IBAN` | Conta que recebe o dinheiro |
+| `MBWAY` | Número de MB Way |
+| `MAPS_LINK` | Link do Google Maps para o campo |
+| `CAMPO` | Texto do botão do mapa |
+| `DEFAULTS` | Hora, vagas e preço por omissão de cada jogo novo |
+| `KITS` | Nomes e cores das três equipas |
+
+Hora, vagas, preço e data mudam-se dentro da própria app, na secção **Organização**, sem tocar no código.
+
+---
 
 ## Estrutura
 
 ```
-index.html            Site completo (React via CDN, sem build)
-supabase/schema.sql    Tabela + políticas + realtime para o Supabase
+index.html           App completa (Preact + htm, sem build)
+manifest.json        Instalar no telemóvel como app
+icon.svg / icon.png  Ícone
+og.png               Imagem do link partilhado no WhatsApp
+supabase/schema.sql  Tabelas, políticas e tempo real
 ```
 
-## Dados fixos no código
+## Deploy
 
-- IBAN e MB Way: no topo do `index.html` (`IBAN`, `MBWAY`)
-- Local do jogo: `MAPS_LINK` (link do Google Maps)
-
-Para alterar qualquer um destes, edita as constantes no início do ficheiro.
+Já está ligado ao Vercel. Cada `git push` para `main` publica em produção.

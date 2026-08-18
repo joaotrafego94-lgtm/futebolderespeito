@@ -2,54 +2,231 @@
 <html lang="pt-PT">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Futebol de Respeito</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Futebol de Respeito · A pelada de domingo</title>
+<meta name="description" content="Lista da pelada, pagamentos e sorteio de equipas. Entra, paga, joga." />
+<meta name="theme-color" content="#061A11" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="apple-touch-icon" href="/icon.png" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Futebol de Respeito" />
+<meta property="og:description" content="Entra na lista, paga a tua parte e vê as equipas. Domingo é domingo." />
+<meta property="og:image" content="https://futebolderespeito.vercel.app/og.png" />
+<meta property="og:url" content="https://futebolderespeito.vercel.app" />
+<meta name="twitter:card" content="summary_large_image" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet" />
+
 <style>
-  body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background:#F9FAFB; }
+:root{
+  --bg:#061A11; --card:#0E2E1F; --card2:#123A28; --line:rgba(255,255,255,.09);
+  --txt:#EAF5EE; --dim:#8FB09E; --faint:#5D7D6C;
+  --acc:#2FE38B; --acc-d:#17A862; --acc-ink:#04311D; --warn:#FFC24B; --bad:#FF6B6B;
+  --r:16px; --pad:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg); color:var(--txt); min-height:100dvh;
+  font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  padding:env(safe-area-inset-top) 0 calc(28px + env(safe-area-inset-bottom));
+}
+.wrap{max-width:560px;margin:0 auto;padding:0 14px;display:flex;flex-direction:column;gap:12px}
+.disp{font-family:"Barlow Condensed",system-ui,sans-serif;font-weight:700;letter-spacing:.01em;line-height:1}
+.up{text-transform:uppercase;letter-spacing:.09em}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:var(--pad)}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.card-t{font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.09em}
+
+.hero{position:relative;overflow:hidden;border-radius:var(--r);border:1px solid var(--line);
+  background:linear-gradient(165deg,#134A31 0%,#0C2C1D 55%,#0A2317 100%);padding:18px var(--pad) var(--pad)}
+.hero .pitch{position:absolute;inset:0;width:100%;height:100%;opacity:.15;pointer-events:none}
+.hero-in{position:relative}
+.brand{display:flex;align-items:center;gap:9px;margin-bottom:16px}
+.brand b{font-size:13.5px;letter-spacing:.1em;text-transform:uppercase}
+.kick{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.kick .dnum{font-size:58px;color:#fff}
+.kick .dtxt{padding-bottom:6px}
+.kick .dtxt .d1{font-size:19px;color:#fff;text-transform:capitalize}
+.kick .dtxt .d2{font-size:12px;color:var(--acc);font-weight:600;margin-top:3px;letter-spacing:.04em}
+.hero-foot{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.07);
+  border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:12.5px;color:var(--txt);
+  text-decoration:none;font-weight:500}
+.pill:active{background:rgba(255,255,255,.14)}
+
+button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+.btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;
+  padding:13px 14px;border-radius:12px;font-size:14.5px;font-weight:600;transition:filter .15s,opacity .15s}
+.btn:active{filter:brightness(.9)}
+.btn:disabled{opacity:.35;cursor:default}
+.btn-1{background:var(--acc);color:var(--acc-ink)}
+.btn-2{background:var(--card2);color:var(--txt);border:1px solid var(--line)}
+.btn-g{background:transparent;color:var(--dim);border:1px solid var(--line)}
+.btn-s{width:auto;padding:8px 13px;font-size:12.5px;border-radius:10px}
+
+input,select{font:inherit;width:100%;background:#0A2417;border:1px solid var(--line);color:var(--txt);
+  border-radius:11px;padding:11px 12px;outline:none}
+input:focus,select:focus{border-color:var(--acc)}
+input::placeholder{color:var(--faint)}
+label{display:block;font-size:11px;font-weight:700;color:var(--faint);margin-bottom:6px;
+  text-transform:uppercase;letter-spacing:.07em}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field+.field,.grid2+.field,.field+.grid2,.grid2+.grid2{margin-top:12px}
+
+.me-in{display:flex;align-items:center;gap:12px}
+.me-badge{width:44px;height:44px;border-radius:12px;background:var(--acc);color:var(--acc-ink);
+  display:grid;place-items:center;flex:none;font-size:17px;font-weight:700}
+.me-txt{flex:1;min-width:0}
+.me-txt b{display:block;font-size:15px}
+.me-txt span{font-size:12.5px;color:var(--dim)}
+
+.sec{font-size:10.5px;font-weight:700;color:var(--faint);margin:15px 0 8px;display:flex;
+  align-items:center;gap:9px;text-transform:uppercase;letter-spacing:.09em}
+.sec::after{content:"";flex:1;height:1px;background:var(--line)}
+.row{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:11px;background:#0B2718;
+  border:1px solid transparent}
+.row+.row{margin-top:5px}
+.row.mine{border-color:rgba(47,227,139,.45);background:rgba(47,227,139,.08)}
+.row.sub{opacity:.72}
+.num{width:23px;height:23px;border-radius:7px;background:#123A28;color:var(--dim);flex:none;
+  display:grid;place-items:center;font-size:12px}
+.row.mine .num{background:var(--acc);color:var(--acc-ink)}
+.nm{flex:1;min-width:0;font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nm i{font-style:normal;color:var(--acc);font-size:10.5px;font-weight:700;margin-left:6px;letter-spacing:.06em}
+.tag{font-size:11px;font-weight:700;padding:5px 10px;border-radius:999px;flex:none}
+.tag-ok{background:var(--acc);color:var(--acc-ink)}
+.tag-no{background:rgba(255,194,75,.15);color:var(--warn)}
+.x{width:28px;height:28px;border-radius:8px;color:var(--faint);flex:none;font-size:15px}
+.x:active{background:rgba(255,107,107,.15);color:var(--bad)}
+.empty{text-align:center;color:var(--faint);font-size:13.5px;padding:22px 0}
+
+.bar{height:7px;border-radius:999px;background:#0A2417;overflow:hidden;border:1px solid var(--line)}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--acc-d),var(--acc));
+  transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.money{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;gap:10px}
+.money .big{font-size:30px;color:#fff}
+.money .sub{font-size:12.5px;color:var(--dim);text-align:right}
+.copyrow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#0A2417;
+  border:1px solid var(--line);border-radius:11px;padding:10px 12px}
+.copyrow+.copyrow{margin-top:8px}
+.copyrow .k{font-size:10.5px;color:var(--faint);font-weight:700;letter-spacing:.07em}
+.copyrow .v{font-size:13.5px;font-weight:600;margin-top:2px}
+
+.teams{display:grid;gap:10px}
+@media(min-width:520px){.teams{grid-template-columns:repeat(3,1fr)}}
+.team{border-radius:13px;padding:12px;background:#0A2417;border:1px solid var(--line);
+  animation:pop .35s cubic-bezier(.2,.9,.3,1.2) both}
+.team-h{display:flex;align-items:center;gap:8px;padding-bottom:9px;margin-bottom:9px;
+  border-bottom:1px solid var(--line)}
+.shirt{width:19px;height:19px;flex:none}
+.team-h b{font-size:12.5px;letter-spacing:.07em;text-transform:uppercase}
+.team p{font-size:13.5px;padding:4px 0;color:var(--txt)}
+.team p+p{border-top:1px dashed rgba(255,255,255,.06)}
+@keyframes pop{from{opacity:0;transform:translateY(9px) scale(.97)}to{opacity:1;transform:none}}
+.rolling .team{animation:none}
+
+details.org summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+  font-size:11px;font-weight:700;color:var(--faint);letter-spacing:.09em;text-transform:uppercase}
+details.org summary::-webkit-details-marker{display:none}
+details.org[open] summary{margin-bottom:14px}
+details.org summary::after{content:"\25BE";transition:transform .2s}
+details.org[open] summary::after{transform:rotate(180deg)}
+
+.note{font-size:12.5px;color:var(--warn);background:rgba(255,194,75,.1);border:1px solid rgba(255,194,75,.25);
+  border-radius:11px;padding:10px 12px;line-height:1.45}
+.foot{text-align:center;font-size:11.5px;color:var(--faint);padding:4px 0 8px}
+.live{display:inline-flex;align-items:center;gap:6px}
+.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--acc);
+  animation:blink 1.8s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--acc);
+  color:var(--acc-ink);font-size:13px;font-weight:700;padding:11px 18px;border-radius:999px;z-index:9;
+  animation:up .25s ease both;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+@keyframes up{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+.boot{display:grid;place-items:center;min-height:70dvh;color:var(--faint);font-size:13px}
 </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const { useState, useEffect, useRef } = React;
+<div id="app"><div class="boot">A carregar a pelada…</div></div>
+
+<script type="module">
+import { h, render } from "https://esm.sh/preact@10.19.6";
+import { useState, useEffect, useRef, useCallback } from "https://esm.sh/preact@10.19.6/hooks";
+import htm from "https://esm.sh/htm@3.1.1";
+
+const html = htm.bind(h);
 
 /* ============================================================
-   CONFIGURAÇÃO SUPABASE
-   Substitui os dois valores abaixo pelos do teu projeto Supabase
-   (Project Settings -> API). Enquanto estiverem por preencher,
-   a app usa localStorage (só neste dispositivo) como reserva.
+   CONFIGURAÇÃO
+   Muda aqui os dados do grupo. Os dois primeiros valores ligam
+   a app ao Supabase (Project Settings > API). Enquanto
+   estiverem por preencher, a app guarda tudo só neste
+   telemóvel — funciona, mas não é partilhada.
    ============================================================ */
 const SUPABASE_URL = "COLOCAR_AQUI";
 const SUPABASE_ANON_KEY = "COLOCAR_AQUI";
 
-const supabaseConfigured = SUPABASE_URL !== "COLOCAR_AQUI" && SUPABASE_ANON_KEY !== "COLOCAR_AQUI";
-const supabase = supabaseConfigured && window.supabase
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  : null;
-
-const TEAM_DEFS = [
-  { name: "Time 1", color: "#2563EB", light: "#EFF4FE" },
-  { name: "Time 2", color: "#16A34A", light: "#EEF8F1" },
-  { name: "Time 3", color: "#D97706", light: "#FDF3E7" },
-];
-
 const IBAN = "PT50 0007 0000 0658 0592 5323";
 const MBWAY = "+351 914 068 950";
 const MAPS_LINK = "https://maps.app.goo.gl/aCSuyV77kXDmsYV47?g_st=ic";
-const STORAGE_KEY = "futebolderespeito-state";
+const CAMPO = "Ver o campo no mapa";
 
-function nextSunday() {
-  const d = new Date();
-  const day = d.getDay();
-  const add = (7 - day) % 7 || 7;
-  d.setDate(d.getDate() + (day === 0 ? 0 : add));
-  return d.toISOString().slice(0, 10);
+const DEFAULTS = { kickoff: "10:00", slots: 15, price: 5 };
+const ME_KEY = "fdr:me";
+const LOCAL_KEY = "fdr:local";
+
+const configured = SUPABASE_URL !== "COLOCAR_AQUI" && SUPABASE_ANON_KEY !== "COLOCAR_AQUI";
+
+const KITS = [
+  { name: "Coletes", color: "#FF8A1E" },
+  { name: "Brancos", color: "#F2F5F3" },
+  { name: "Escuros", color: "#5B7CFF" },
+];
+
+/* ---------------- datas ---------------- */
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const today = () => iso(new Date());
+
+function nextSunday(from) {
+  const d = from ? new Date(from + "T00:00:00") : new Date();
+  const base = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const add = (7 - base.getDay()) % 7;
+  base.setDate(base.getDate() + (from ? add || 7 : add));
+  return iso(base);
 }
+
+function longDate(d) {
+  return new Date(d + "T00:00:00").toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
+}
+function weekday(d) {
+  return new Date(d + "T00:00:00").toLocaleDateString("pt-PT", { weekday: "long" });
+}
+function dayNum(d) {
+  return new Date(d + "T00:00:00").getDate();
+}
+function monthName(d) {
+  return new Date(d + "T00:00:00").toLocaleDateString("pt-PT", { month: "long" });
+}
+function daysAway(d) {
+  const a = new Date(today() + "T00:00:00");
+  const b = new Date(d + "T00:00:00");
+  return Math.round((b - a) / 86400000);
+}
+function countdown(d) {
+  const n = daysAway(d);
+  if (n < 0) return "já foi";
+  if (n === 0) return "é hoje";
+  if (n === 1) return "é amanhã";
+  return `faltam ${n} dias`;
+}
+
+const eur = (n) => `${Number(n || 0).toFixed(2).replace(".", ",").replace(",00", "")}€`;
 
 function shuffle(arr) {
   const a = [...arr];
@@ -60,410 +237,504 @@ function shuffle(arr) {
   return a;
 }
 
+function initials(name) {
+  const p = name.trim().split(/\s+/);
+  return ((p[0] || "")[0] + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
+}
+
 /* ============================================================
    CAMADA DE DADOS
-   Se o Supabase estiver configurado, os jogadores ficam
-   guardados na tabela "players" (ver supabase/schema.sql) e
-   partilhados entre todos os dispositivos que abrirem o site
-   para a mesma data. Sem Supabase configurado, cai para
-   localStorage (só neste aparelho).
+   Duas implementações com a mesma interface. A app não sabe
+   qual está a usar — muda só a linha do "store" no fim.
    ============================================================ */
-async function dbFetchPlayers(date) {
-  if (!supabase) return null; // sinaliza para usar localStorage
-  const { data, error } = await supabase
-    .from("players")
-    .select("*")
-    .eq("game_date", date)
-    .order("created_at", { ascending: true });
-  if (error) {
-    console.error("Erro a carregar jogadores:", error);
-    return [];
-  }
-  return data.map((r) => ({ id: r.id, name: r.name, paid: r.paid }));
+function localStore() {
+  const read = () => {
+    try { return JSON.parse(localStorage.getItem(LOCAL_KEY)) || {}; } catch { return {}; }
+  };
+  const write = (s) => { try { localStorage.setItem(LOCAL_KEY, JSON.stringify(s)); } catch {} };
+
+  return {
+    live: false,
+    async currentGame() {
+      const s = read();
+      if (s.game && s.game.game_date >= today()) return s.game;
+      const game = { game_date: nextSunday(), ...DEFAULTS, teams: null };
+      write({ ...s, game, players: s.game ? [] : s.players || [] });
+      return game;
+    },
+    async saveGame(date, patch) {
+      const s = read();
+      const game = { ...(s.game || {}), ...patch, game_date: patch.game_date || date };
+      if (patch.game_date && patch.game_date !== date) s.players = [];
+      write({ ...s, game });
+      return game;
+    },
+    async players() {
+      return read().players || [];
+    },
+    async addPlayer(date, name) {
+      const s = read();
+      const row = { id: `l${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name, paid: false };
+      s.players = [...(s.players || []), row];
+      write(s);
+      return row;
+    },
+    async setPaid(id, paid) {
+      const s = read();
+      s.players = (s.players || []).map((p) => (p.id === id ? { ...p, paid } : p));
+      write(s);
+    },
+    async removePlayer(id) {
+      const s = read();
+      s.players = (s.players || []).filter((p) => p.id !== id);
+      write(s);
+    },
+    subscribe() { return () => {}; },
+  };
 }
 
-async function dbAddPlayer(date, name) {
-  if (!supabase) return null;
-  const { data, error } = await supabase
-    .from("players")
-    .insert({ name, paid: false, game_date: date })
-    .select()
-    .single();
-  if (error) console.error("Erro a adicionar jogador:", error);
-  return data;
-}
+async function remoteStore() {
+  const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.39.7");
+  const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-async function dbTogglePaid(id, paid) {
-  if (!supabase) return;
-  const { error } = await supabase.from("players").update({ paid }).eq("id", id);
-  if (error) console.error("Erro a atualizar pagamento:", error);
-}
-
-async function dbRemovePlayer(id) {
-  if (!supabase) return;
-  const { error } = await supabase.from("players").delete().eq("id", id);
-  if (error) console.error("Erro a remover jogador:", error);
-}
-
-function dbSubscribe(date, onChange) {
-  if (!supabase) return () => {};
-  const channel = supabase
-    .channel(`players-${date}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "players", filter: `game_date=eq.${date}` },
-      onChange
-    )
-    .subscribe();
-  return () => supabase.removeChannel(channel);
-}
-
-function CopyField({ label, value }) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch (e) {}
-  }
-  return (
-    <div className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg" style={{ background: "#F3F4F6" }}>
-      <div>
-        <div className="text-xs" style={{ color: "#6B7280" }}>{label}</div>
-        <div className="text-sm font-medium" style={{ color: "#111827" }}>{value}</div>
-      </div>
-      <button
-        onClick={copy}
-        className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-md shrink-0"
-        style={{ background: copied ? "#16A34A" : "#2563EB", color: "#FFFFFF" }}
-      >
-        {copied ? "✓ Copiado" : "Copiar"}
-      </button>
-    </div>
-  );
-}
-
-function App() {
-  const [loaded, setLoaded] = useState(false);
-  const [players, setPlayers] = useState([]);
-  const [date, setDate] = useState(nextSunday());
-  const [time, setTime] = useState("10:00");
-  const [slots, setSlots] = useState(15);
-  const [newName, setNewName] = useState("");
-  const [teams, setTeams] = useState(null);
-  const [shuffling, setShuffling] = useState(false);
-  const [listCopied, setListCopied] = useState(false);
-  const intervalRef = useRef(null);
-
-  // Carrega config local (data, hora, vagas, sorteio) — estes campos ficam
-  // sempre no localStorage, só a lista de jogadores é que pode ser partilhada.
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const s = JSON.parse(raw);
-        setDate(s.date || nextSunday());
-        setTime(s.time || "10:00");
-        setSlots(s.slots || 15);
-        setTeams(s.teams || null);
-        if (!supabase) setPlayers(s.players || []);
+  return {
+    live: true,
+    async currentGame() {
+      const { data } = await sb.from("games").select("*").gte("game_date", today())
+        .order("game_date", { ascending: true }).limit(1);
+      if (data && data.length) return data[0];
+      const novo = { game_date: nextSunday(), ...DEFAULTS, teams: null };
+      const { data: ins } = await sb.from("games").upsert(novo).select().single();
+      return ins || novo;
+    },
+    async saveGame(date, patch) {
+      if (patch.game_date && patch.game_date !== date) {
+        const { data: existente } = await sb.from("games").select("*").eq("game_date", patch.game_date).maybeSingle();
+        if (existente) return existente;
+        const { data } = await sb.from("games")
+          .upsert({ game_date: patch.game_date, kickoff: patch.kickoff, slots: patch.slots, price: patch.price, teams: null })
+          .select().single();
+        return data;
       }
-    } catch (e) {}
-    setLoaded(true);
+      const { data } = await sb.from("games").update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("game_date", date).select().single();
+      return data;
+    },
+    async players(date) {
+      const { data, error } = await sb.from("players").select("*").eq("game_date", date)
+        .order("created_at", { ascending: true });
+      if (error) { console.error(error); return []; }
+      return data.map((r) => ({ id: r.id, name: r.name, paid: r.paid }));
+    },
+    async addPlayer(date, name) {
+      const { data, error } = await sb.from("players").insert({ game_date: date, name, paid: false }).select().single();
+      if (error) { console.error(error); return null; }
+      return { id: data.id, name: data.name, paid: data.paid };
+    },
+    async setPaid(id, paid) {
+      const { error } = await sb.from("players").update({ paid }).eq("id", id);
+      if (error) console.error(error);
+    },
+    async removePlayer(id) {
+      const { error } = await sb.from("players").delete().eq("id", id);
+      if (error) console.error(error);
+    },
+    subscribe(date, onChange) {
+      const ch = sb.channel(`fdr-${date}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `game_date=eq.${date}` }, onChange)
+        .on("postgres_changes", { event: "*", schema: "public", table: "games" }, onChange)
+        .subscribe();
+      return () => sb.removeChannel(ch);
+    },
+  };
+}
+
+/* ============================================================
+   PEÇAS VISUAIS
+   ============================================================ */
+const Pitch = () => html`
+  <svg class="pitch" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <g fill="none" stroke="#ffffff" stroke-width="1.6">
+      <rect x="8" y="8" width="384" height="204" rx="3" />
+      <line x1="200" y1="8" x2="200" y2="212" />
+      <circle cx="200" cy="110" r="42" />
+      <circle cx="200" cy="110" r="3" fill="#ffffff" stroke="none" />
+      <rect x="8" y="55" width="52" height="110" />
+      <rect x="340" y="55" width="52" height="110" />
+    </g>
+  </svg>`;
+
+const Crest = () => html`
+  <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+    <path d="M16 2 29 6v10c0 8-6.5 13-13 14C9.5 29 3 24 3 16V6z" fill="none" stroke="#2FE38B" stroke-width="2" />
+    <circle cx="16" cy="15" r="5.5" fill="none" stroke="#2FE38B" stroke-width="1.8" />
+    <path d="M16 9.5v11M10.5 15h11" stroke="#2FE38B" stroke-width="1.8" />
+  </svg>`;
+
+const Shirt = ({ color }) => html`
+  <svg class="shirt" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M8.5 2 4 4.5 2.5 9l3 1.2V22h13V10.2l3-1.2L20 4.5 15.5 2a3.7 3.7 0 0 1-7 0z"
+      fill=${color} stroke="rgba(0,0,0,.35)" stroke-width=".8" />
+  </svg>`;
+
+function CopyRow({ k, v, onCopy }) {
+  return html`
+    <div class="copyrow">
+      <div>
+        <div class="k">${k}</div>
+        <div class="v">${v}</div>
+      </div>
+      <button class="btn btn-2 btn-s" onClick=${() => onCopy(v, k)}>Copiar</button>
+    </div>`;
+}
+
+/* ============================================================
+   APP
+   ============================================================ */
+function App({ store }) {
+  const [game, setGame] = useState(null);
+  const [players, setPlayers] = useState([]);
+  const [me, setMe] = useState(() => { try { return JSON.parse(localStorage.getItem(ME_KEY)); } catch { return null; } });
+  const [nome, setNome] = useState("");
+  const [outro, setOutro] = useState("");
+  const [rolling, setRolling] = useState(false);
+  const [toast, setToast] = useState("");
+  const [busy, setBusy] = useState(false);
+  const timer = useRef(null);
+
+  const say = useCallback((m) => {
+    setToast(m);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setToast(""), 1800);
   }, []);
 
-  useEffect(() => {
-    if (!loaded) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ players: supabase ? [] : players, date, time, slots, teams }));
-    } catch (e) {}
-  }, [players, date, time, slots, teams, loaded]);
+  const refresh = useCallback(async (date) => {
+    const rows = await store.players(date);
+    setPlayers(rows);
+  }, [store]);
 
-  // Carrega e subscreve jogadores da data escolhida (via Supabase, se configurado)
   useEffect(() => {
-    if (!loaded || !supabase) return;
-    let active = true;
+    let alive = true;
     (async () => {
-      const rows = await dbFetchPlayers(date);
-      if (active && rows) setPlayers(rows);
+      const g = await store.currentGame();
+      if (!alive) return;
+      setGame(g);
+      const rows = await store.players(g.game_date);
+      if (alive) setPlayers(rows);
     })();
-    const unsubscribe = dbSubscribe(date, async () => {
-      const rows = await dbFetchPlayers(date);
-      if (active && rows) setPlayers(rows);
+    return () => { alive = false; };
+  }, [store]);
+
+  useEffect(() => {
+    if (!game) return;
+    const off = store.subscribe(game.game_date, async () => {
+      const g = await store.currentGame();
+      setGame(g);
+      const rows = await store.players(g.game_date);
+      setPlayers(rows);
     });
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [date, loaded]);
+    return off;
+  }, [store, game && game.game_date]);
 
-  const paidCount = players.filter((p) => p.paid).length;
-  const pct = players.length ? Math.round((paidCount / players.length) * 100) : 0;
-  const full = players.length >= slots;
+  if (!game) return html`<div class="boot">A carregar a pelada…</div>`;
 
-  async function addPlayer() {
-    const name = newName.trim();
-    if (!name) return;
-    setNewName("");
-    setTeams(null);
-    if (supabase) {
-      const row = await dbAddPlayer(date, name);
-      if (row) setPlayers((p) => [...p, { id: row.id, name: row.name, paid: row.paid }]);
-    } else {
-      setPlayers((p) => [...p, { id: Date.now() + Math.random(), name, paid: false }]);
+  const slots = game.slots || DEFAULTS.slots;
+  const price = Number(game.price ?? DEFAULTS.price);
+  const titulares = players.slice(0, slots);
+  const suplentes = players.slice(slots);
+  const pagos = players.filter((p) => p.paid);
+  const pct = players.length ? Math.round((pagos.length / players.length) * 100) : 0;
+  const myRow = me ? players.find((p) => p.id === me.id) : null;
+  const myIdx = myRow ? players.findIndex((p) => p.id === me.id) : -1;
+  const souSuplente = myIdx >= slots;
+
+  async function patch(p) {
+    const g = await store.saveGame(game.game_date, p);
+    if (g) {
+      setGame(g);
+      if (p.game_date && p.game_date !== game.game_date) refresh(g.game_date);
     }
   }
 
-  async function togglePaid(id) {
-    const player = players.find((p) => p.id === id);
-    if (!player) return;
-    const newPaid = !player.paid;
-    setPlayers((p) => p.map((pl) => (pl.id === id ? { ...pl, paid: newPaid } : pl)));
-    if (supabase) await dbTogglePaid(id, newPaid);
+  async function entrar() {
+    const n = nome.trim();
+    if (!n || busy) return;
+    setBusy(true);
+    const row = await store.addPlayer(game.game_date, n);
+    setBusy(false);
+    if (!row) return say("Não deu para entrar");
+    const novo = { id: row.id, name: row.name };
+    localStorage.setItem(ME_KEY, JSON.stringify(novo));
+    setMe(novo);
+    setNome("");
+    setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
+    await patch({ teams: null });
+    say(players.length >= slots ? "Ficaste como suplente" : "Estás dentro");
   }
 
-  async function removePlayer(id, name) {
-    if (!window.confirm(`Remover ${name} da lista?`)) return;
-    setPlayers((p) => p.filter((pl) => pl.id !== id));
-    setTeams(null);
-    if (supabase) await dbRemovePlayer(id);
+  async function adicionar() {
+    const n = outro.trim();
+    if (!n || busy) return;
+    setBusy(true);
+    const row = await store.addPlayer(game.game_date, n);
+    setBusy(false);
+    if (!row) return;
+    setOutro("");
+    setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
+    await patch({ teams: null });
+    say(`${row.name} na lista`);
   }
 
-  function novaSemana() {
-    if (!window.confirm("Começar uma nova semana? A data avança para o próximo domingo (a lista dessa nova data começa vazia).")) return;
-    setTeams(null);
-    setDate(nextSunday());
+  async function togglePago(p) {
+    const novo = !p.paid;
+    setPlayers((l) => l.map((x) => (x.id === p.id ? { ...x, paid: novo } : x)));
+    await store.setPaid(p.id, novo);
   }
 
-  function drawTeams() {
-    if (players.length < 3) return;
-    setShuffling(true);
-    let ticks = 0;
-    const maxTicks = 10;
-    intervalRef.current = setInterval(() => {
-      ticks++;
-      const shuffled = shuffle(players);
-      const preview = [[], [], []];
-      shuffled.forEach((pl, i) => preview[i % 3].push(pl.name));
-      setTeams(preview);
-      if (ticks >= maxTicks) {
-        clearInterval(intervalRef.current);
-        setShuffling(false);
+  async function sair(p) {
+    if (!confirm(`Tirar ${p.name} da lista?`)) return;
+    setPlayers((l) => l.filter((x) => x.id !== p.id));
+    await store.removePlayer(p.id);
+    if (me && me.id === p.id) { localStorage.removeItem(ME_KEY); setMe(null); }
+    await patch({ teams: null });
+  }
+
+  function sortear() {
+    if (titulares.length < 3 || rolling) return;
+    setRolling(true);
+    let t = 0;
+    const iv = setInterval(async () => {
+      t++;
+      const s = shuffle(titulares.map((p) => p.name));
+      const prev = [[], [], []];
+      s.forEach((n, i) => prev[i % 3].push(n));
+      if (t >= 11) {
+        clearInterval(iv);
+        setRolling(false);
+        await patch({ teams: prev });
+      } else {
+        setGame((g) => ({ ...g, teams: prev }));
       }
-    }, 90);
+    }, 85);
   }
 
-  async function copyList() {
-    const weekdayShort = new Date(date + "T00:00:00").toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
-    const lines = [];
-    lines.push(`⚽ Futebol de Respeito`);
-    lines.push(`${weekdayShort} · ${time}`);
-    lines.push(MAPS_LINK);
-    lines.push("");
-    lines.push(`Jogadores (${players.length}/${slots}):`);
-    players.forEach((p, i) => {
-      lines.push(`${i + 1}. ${p.name} - ${p.paid ? "✅ Pago" : "⏳ Por pagar"}`);
-    });
-    lines.push("");
-    lines.push(`IBAN: ${IBAN}`);
-    lines.push(`MB Way: ${MBWAY}`);
-    const text = lines.join("\n");
+  async function copiar(txt, o) {
     try {
-      await navigator.clipboard.writeText(text);
-      setListCopied(true);
-      setTimeout(() => setListCopied(false), 1500);
-    } catch (e) {}
+      await navigator.clipboard.writeText(txt);
+      say(o ? `${o} copiado` : "Copiado");
+    } catch {
+      say("Copia à mão, o browser não deixou");
+    }
   }
 
-  const weekday = new Date(date + "T00:00:00").toLocaleDateString("pt-PT", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  function textoWhatsApp() {
+    const L = [];
+    L.push("*FUTEBOL DE RESPEITO*");
+    L.push(`${longDate(game.game_date)} · ${game.kickoff}`);
+    L.push(MAPS_LINK);
+    L.push("");
+    L.push(`*Convocados (${titulares.length}/${slots})*`);
+    titulares.forEach((p, i) => L.push(`${i + 1}. ${p.name} ${p.paid ? "✅" : "⏳"}`));
+    if (suplentes.length) {
+      L.push("");
+      L.push("*Suplentes*");
+      suplentes.forEach((p, i) => L.push(`${i + 1}. ${p.name} ${p.paid ? "✅" : "⏳"}`));
+    }
+    if (game.teams) {
+      L.push("");
+      L.push("*Equipas*");
+      game.teams.forEach((t, i) => { if (t.length) L.push(`${KITS[i].name}: ${t.join(", ")}`); });
+    }
+    L.push("");
+    L.push(`${eur(price)} cada · ${pagos.length}/${players.length} já pagaram`);
+    L.push(`IBAN: ${IBAN}`);
+    L.push(`MB Way: ${MBWAY}`);
+    L.push("");
+    L.push(location.origin);
+    return L.join("\n");
+  }
 
-  return (
-    <div style={{ minHeight: "100vh", color: "#111827" }}>
-      <div className="max-w-2xl mx-auto px-5 py-6 sm:py-8 flex flex-col gap-4">
+  const Linha = (p, i, sub) => html`
+    <div class=${`row${me && me.id === p.id ? " mine" : ""}${sub ? " sub" : ""}`} key=${p.id}>
+      <span class="num disp">${sub ? i + 1 : i + 1}</span>
+      <span class="nm">${p.name}${me && me.id === p.id ? html`<i>TU</i>` : null}</span>
+      <button class=${`tag ${p.paid ? "tag-ok" : "tag-no"}`} onClick=${() => togglePago(p)}>
+        ${p.paid ? "Pago" : "Falta"}
+      </button>
+      <button class="x" onClick=${() => sair(p)} aria-label="Tirar da lista">✕</button>
+    </div>`;
 
-        {!supabaseConfigured && (
-          <div className="rounded-lg px-3 py-2 text-xs font-medium" style={{ background: "#FEF3C7", color: "#92400E" }}>
-            Supabase não configurado — a lista está guardada só neste dispositivo. Preenche SUPABASE_URL e SUPABASE_ANON_KEY no topo do ficheiro para partilhar entre todos.
-          </div>
-        )}
+  return html`
+    <div class="wrap">
 
-        <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <label className="text-xs font-medium mb-1 block" style={{ color: "#6B7280" }}>Data</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
-                style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", color: "#111827" }}
-              />
+      ${!configured && html`<div class="note">
+        A lista está guardada só neste telemóvel. Para todos verem a mesma, liga o Supabase
+        (instruções no README).
+      </div>`}
+
+      <div class="hero">
+        <${Pitch} />
+        <div class="hero-in">
+          <div class="brand"><${Crest} /><b>Futebol de Respeito</b></div>
+          <div class="kick">
+            <div class="dnum disp">${dayNum(game.game_date)}</div>
+            <div class="dtxt">
+              <div class="d1 disp">${weekday(game.game_date)}, ${monthName(game.game_date)}</div>
+              <div class="d2 up">${game.kickoff} · ${countdown(game.game_date)}</div>
             </div>
-            <div>
-              <label className="text-xs font-medium mb-1 block" style={{ color: "#6B7280" }}>Hora</label>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
-                style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", color: "#111827" }}
-              />
-            </div>
           </div>
-          <a
-            href={MAPS_LINK}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg"
-            style={{ background: "#F3F4F6", color: "#2563EB" }}
-          >
-            Ver local no Google Maps
-          </a>
-          <div className="text-sm capitalize mt-2" style={{ color: "#6B7280" }}>
-            {weekday} {time && `· ${time}`}
+          <div class="hero-foot">
+            <a class="pill" href=${MAPS_LINK} target="_blank" rel="noopener noreferrer">\u{1F4CD} ${CAMPO}</a>
+            <span class="pill">${titulares.length}/${slots} ${titulares.length >= slots ? "· lotado" : "vagas"}</span>
+            ${suplentes.length ? html`<span class="pill">+${suplentes.length} ${suplentes.length === 1 ? "suplente" : "suplentes"}</span>` : null}
           </div>
-          <button
-            onClick={novaSemana}
-            className="w-full mt-3 text-sm font-medium px-3 py-2 rounded-lg"
-            style={{ background: "#FEF3C7", color: "#92400E" }}
-          >
-            Nova semana (avançar data)
+        </div>
+      </div>
+
+      <div class="card">
+        ${myRow
+          ? html`<div class="me-in">
+              <div class="me-badge disp">${initials(myRow.name)}</div>
+              <div class="me-txt">
+                <b>${myRow.name}</b>
+                <span>${souSuplente ? `Suplente · ${myIdx - slots + 1}º na fila` : `Convocado · posição ${myIdx + 1}`} · ${myRow.paid ? "pago" : `faltam ${eur(price)}`}</span>
+              </div>
+              <button class=${`btn btn-s ${myRow.paid ? "btn-2" : "btn-1"}`} onClick=${() => togglePago(myRow)}>
+                ${myRow.paid ? "Pago ✓" : "Já paguei"}
+              </button>
+            </div>`
+          : html`<div>
+              <div class="card-t" style="margin-bottom:10px">A tua vaga</div>
+              <div style="display:flex;gap:8px">
+                <input value=${nome} placeholder="O teu nome"
+                  onInput=${(e) => setNome(e.target.value)}
+                  onKeyDown=${(e) => e.key === "Enter" && entrar()} />
+                <button class="btn btn-1 btn-s" style="padding-inline:18px" disabled=${!nome.trim() || busy}
+                  onClick=${entrar}>Entrar</button>
+              </div>
+            </div>`}
+      </div>
+
+      <div class="card">
+        <div class="card-h">
+          <span class="card-t">Convocados</span>
+          <span class="card-t">${titulares.length}/${slots}</span>
+        </div>
+
+        ${players.length === 0
+          ? html`<div class="empty">Ainda ninguém. Sê o primeiro a entrar.</div>`
+          : html`
+            <div>${titulares.map((p, i) => Linha(p, i, false))}</div>
+            ${suplentes.length
+              ? html`<div><div class="sec">Suplentes</div>${suplentes.map((p, i) => Linha(p, i, true))}</div>`
+              : null}
+          `}
+
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <input value=${outro} placeholder="Juntar outro jogador"
+            onInput=${(e) => setOutro(e.target.value)}
+            onKeyDown=${(e) => e.key === "Enter" && adicionar()} />
+          <button class="btn btn-2 btn-s" style="padding-inline:16px" disabled=${!outro.trim() || busy}
+            onClick=${adicionar}>Juntar</button>
+        </div>
+
+        ${players.length > 0 && html`
+          <button class="btn btn-2" style="margin-top:8px" onClick=${() => copiar(textoWhatsApp(), "Lista")}>
+            Copiar lista para o WhatsApp
+          </button>`}
+      </div>
+
+      <div class="card">
+        <div class="money">
+          <div>
+            <div class="big disp">${eur(pagos.length * price)}</div>
+            <div class="sub" style="text-align:left">de ${eur(players.length * price)} · ${eur(price)} cada</div>
+          </div>
+          <div class="sub">${pagos.length}/${players.length}<br />pagaram</div>
+        </div>
+        <div class="bar"><i style=${`width:${pct}%`}></i></div>
+        <div style="margin-top:12px">
+          <${CopyRow} k="IBAN" v=${IBAN} onCopy=${copiar} />
+          <${CopyRow} k="MB WAY" v=${MBWAY} onCopy=${copiar} />
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-h">
+          <span class="card-t">Equipas</span>
+          <button class="btn btn-1 btn-s" disabled=${titulares.length < 3 || rolling} onClick=${sortear}>
+            ${rolling ? "A sortear…" : game.teams ? "Sortear outra vez" : "Sortear"}
           </button>
         </div>
 
-        <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}>
-          <div className="text-xs font-medium mb-2" style={{ color: "#6B7280" }}>Pagamento</div>
-          <div className="flex flex-col gap-2">
-            <CopyField label="IBAN" value={IBAN} />
-            <CopyField label="MB Way" value={MBWAY} />
+        ${titulares.length < 3
+          ? html`<div class="empty">Faltam jogadores. São precisos 3 para dividir equipas.</div>`
+          : game.teams
+            ? html`<div class=${`teams${rolling ? " rolling" : ""}`}>
+                ${game.teams.map((t, i) => html`
+                  <div class="team" key=${i}>
+                    <div class="team-h"><${Shirt} color=${KITS[i].color} /><b class="disp">${KITS[i].name}</b></div>
+                    ${t.length ? t.map((n, j) => html`<p key=${j}>${n}</p>`) : html`<p style="opacity:.5">—</p>`}
+                  </div>`)}
+              </div>`
+            : html`<div class="empty">Por sortear. ${titulares.length} jogadores prontos.</div>`}
+      </div>
+
+      <details class="card org">
+        <summary>Organização</summary>
+        <div class="grid2">
+          <div class="field">
+            <label>Data</label>
+            <input type="date" value=${game.game_date} onChange=${(e) => patch({ game_date: e.target.value, kickoff: game.kickoff, slots, price })} />
+          </div>
+          <div class="field">
+            <label>Hora</label>
+            <input type="time" value=${game.kickoff} onChange=${(e) => patch({ kickoff: e.target.value })} />
           </div>
         </div>
-
-        <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium" style={{ color: "#6B7280" }}>Pagamentos confirmados</span>
-            <span className="text-sm font-semibold" style={{ color: "#111827" }}>{paidCount}/{players.length}</span>
+        <div class="grid2">
+          <div class="field">
+            <label>Vagas</label>
+            <input type="number" min="3" value=${slots} onChange=${(e) => patch({ slots: Math.max(3, parseInt(e.target.value) || 3), teams: null })} />
           </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: "#E5E7EB" }}>
-            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "#16A34A", transition: "width 0.4s ease" }} />
+          <div class="field">
+            <label>Preço por jogador</label>
+            <input type="number" min="0" step="0.5" value=${price} onChange=${(e) => patch({ price: Math.max(0, parseFloat(e.target.value) || 0) })} />
           </div>
         </div>
+        <button class="btn btn-g" style="margin-top:14px"
+          onClick=${() => confirm("Abrir o jogo do próximo domingo? A lista desse jogo começa vazia.")
+            && patch({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price })}>
+          Abrir o próximo domingo
+        </button>
+        ${me && html`<button class="btn btn-g" style="margin-top:8px"
+          onClick=${() => { localStorage.removeItem(ME_KEY); setMe(null); say("Já não és ninguém aqui"); }}>
+          Esquecer que sou o ${me.name}
+        </button>`}
+      </details>
 
-        <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs font-medium" style={{ color: "#6B7280" }}>Jogadores</div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: "#6B7280" }}>Vagas</span>
-              <input
-                type="number"
-                min="1"
-                value={slots}
-                onChange={(e) => setSlots(Math.max(1, parseInt(e.target.value) || 1))}
-                className="w-14 text-sm px-2 py-1 rounded-lg outline-none text-center"
-                style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", color: "#111827" }}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between mb-3 px-3 py-2 rounded-lg" style={{ background: full ? "#FEF2F2" : "#F3F4F6" }}>
-            <span className="text-sm font-medium" style={{ color: full ? "#B91C1C" : "#111827" }}>
-              {players.length}/{slots} preenchidas
-            </span>
-            {full && <span className="text-xs font-semibold" style={{ color: "#B91C1C" }}>LOTADO</span>}
-          </div>
-
-          <div className="flex gap-2 mb-3">
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addPlayer()}
-              placeholder="Nome do jogador"
-              className="flex-1 text-sm px-3 py-2 rounded-lg outline-none"
-              style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", color: "#111827" }}
-            />
-            <button onClick={addPlayer} className="px-3 py-2 rounded-lg" style={{ background: "#2563EB", color: "#FFFFFF" }}>+</button>
-          </div>
-
-          {players.length === 0 && (
-            <div className="text-sm py-4 text-center" style={{ color: "#9CA3AF" }}>Ainda sem jogadores na lista.</div>
-          )}
-
-          <div className="flex flex-col gap-1.5 mb-3">
-            {players.map((p, i) => (
-              <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: "#F9FAFB" }}>
-                <span className="text-xs w-5 text-right" style={{ color: "#9CA3AF" }}>{i + 1}.</span>
-                <span className="flex-1 text-sm font-medium" style={{ color: "#111827" }}>{p.name}</span>
-                <button
-                  onClick={() => togglePaid(p.id)}
-                  className="text-xs font-medium px-2.5 py-1 rounded-full"
-                  style={p.paid ? { background: "#16A34A", color: "#FFFFFF" } : { background: "#E5E7EB", color: "#6B7280" }}
-                >
-                  {p.paid ? "Pago" : "Por pagar"}
-                </button>
-                <button onClick={() => removePlayer(p.id, p.name)} className="p-1.5 rounded-lg" style={{ color: "#DC2626" }}>✕</button>
-              </div>
-            ))}
-          </div>
-
-          {players.length > 0 && (
-            <button
-              onClick={copyList}
-              className="w-full text-sm font-medium px-3 py-2 rounded-lg"
-              style={{ background: listCopied ? "#16A34A" : "#111827", color: "#FFFFFF" }}
-            >
-              {listCopied ? "✓ Lista copiada" : "Copiar lista para WhatsApp"}
-            </button>
-          )}
-        </div>
-
-        <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs font-medium" style={{ color: "#6B7280" }}>Sorteio de equipas</div>
-            <button
-              onClick={drawTeams}
-              disabled={players.length < 3 || shuffling}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40"
-              style={{ background: "#111827", color: "#FFFFFF" }}
-            >
-              {shuffling ? "A sortear…" : "Sortear"}
-            </button>
-          </div>
-
-          {players.length > 0 && players.length < 3 && (
-            <div className="text-sm" style={{ color: "#9CA3AF" }}>Precisas de pelo menos 3 jogadores para sortear.</div>
-          )}
-
-          {teams && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {teams.map((team, ti) => (
-                <div key={ti} className="rounded-lg p-3" style={{ background: TEAM_DEFS[ti].light }}>
-                  <div className="text-sm font-semibold mb-2 pb-1" style={{ color: TEAM_DEFS[ti].color, borderBottom: `2px solid ${TEAM_DEFS[ti].color}` }}>
-                    {TEAM_DEFS[ti].name}
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {team.map((name, ni) => (<div key={ni} className="text-sm" style={{ color: "#111827" }}>{name}</div>))}
-                    {team.length === 0 && <div className="text-xs italic" style={{ color: "#9CA3AF" }}>sem jogador</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="text-center text-xs" style={{ color: "#9CA3AF" }}>
-          {supabaseConfigured ? "Lista partilhada em tempo real." : "Guardado automaticamente neste dispositivo."}
-        </div>
+      <div class="foot">
+        ${store.live
+          ? html`<span class="live">Lista partilhada, atualiza sozinha</span>`
+          : "Guardado só neste telemóvel"}
       </div>
     </div>
-  );
+
+    ${toast && html`<div class="toast">${toast}</div>`}
+  `;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+/* ---------------- arranque ---------------- */
+(async () => {
+  let store;
+  try {
+    store = configured ? await remoteStore() : localStore();
+  } catch (e) {
+    console.error("Supabase falhou, a usar armazenamento local:", e);
+    store = localStore();
+  }
+  render(h(App, { store }), document.getElementById("app"));
+})();
 </script>
 </body>
 </html>
