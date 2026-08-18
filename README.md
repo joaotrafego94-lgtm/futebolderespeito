@@ -1,8 +1,8 @@
 # Futebol de Respeito
 
-App para organizar a pelada de domingo: lista de convocados, suplentes automáticos, controlo de pagamentos (IBAN / MB Way) e sorteio de três equipas.
+App para organizar a pelada de domingo: lista de confirmados, reservas automáticas, controlo de pagamentos (IBAN / MB Way) e sorteio de três times.
 
-Site estático, sem processo de build. Corre direto no browser.
+Site estático, sem processo de build. Roda direto no navegador.
 
 **No ar:** https://futebolderespeito.vercel.app
 
@@ -11,16 +11,16 @@ Site estático, sem processo de build. Corre direto no browser.
 ## Como funciona
 
 - **Um jogo de cada vez.** A app mostra sempre o próximo jogo com data igual ou posterior a hoje. Toda a gente que abre o link vê o mesmo jogo, a mesma hora e a mesma lista.
-- **Cada um entra sozinho.** Quem abre escreve o nome e carrega em Entrar. O telemóvel guarda quem é, e a partir daí a app trata a pessoa pelo nome e destaca a linha dela.
-- **Suplentes automáticos.** Quem entra depois de as vagas esgotarem fica em Suplentes, por ordem de chegada. Ninguém tem de gerir a fila à mão.
-- **Sorteio partilhado.** As equipas sorteadas ficam guardadas no jogo, por isso aparecem iguais no telemóvel de todos.
-- **Uma mensagem para o WhatsApp.** O botão copia a lista já formatada, com convocados, suplentes, equipas, quanto falta pagar e o IBAN.
+- **Cada um entra sozinho.** Quem abre escreve o nome e carrega em Entrar. O celular guarda quem é, e a partir daí a app trata a pessoa pelo nome e destaca a linha dela.
+- **Reservas automáticas.** Quem entra depois de as vagas esgotarem fica em Reservas, por ordem de chegada. Ninguém tem de gerir a fila à mão.
+- **Sorteio partilhado.** Os times sorteados ficam guardadas no jogo, por isso aparecem iguais no celular de todos.
+- **Uma mensagem para o WhatsApp.** O botão copia a lista já formatada, com confirmados, reservas, times, quanto falta pagar e o IBAN.
 
 ---
 
 ## Ativar a lista partilhada (Supabase)
 
-Sem isto a app funciona, mas guarda tudo só no telemóvel de quem a abriu — cada pessoa vê a sua lista. Com o Supabase ligado, todos veem e editam a mesma, em tempo real.
+Sem isto a app funciona, mas guarda tudo só no celular de quem a abriu — cada pessoa vê a sua lista. Com o Supabase ligado, todos veem e editam a mesma, em tempo real.
 
 1. Cria um projeto grátis em [supabase.com](https://supabase.com)
 2. Vai a **SQL Editor**, cola o conteúdo de `supabase/schema.sql` e corre. Cria as tabelas `games` e `players`, as políticas de acesso e o tempo real.
@@ -57,7 +57,7 @@ Hora, vagas, preço e data mudam-se dentro da própria app, na secção **Organi
 
 ```
 index.html           App completa (Preact + htm, sem build)
-manifest.json        Instalar no telemóvel como app
+manifest.json        Instalar no celular como app
 icon.svg / icon.png  Ícone
 og.png               Imagem do link partilhado no WhatsApp
 supabase/schema.sql  Tabelas, políticas e tempo real

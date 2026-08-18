@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="pt-PT">
+<html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Futebol de Respeito · A pelada de domingo</title>
-<meta name="description" content="Lista da pelada, pagamentos e sorteio de equipas. Entra, paga, joga." />
+<meta name="description" content="Lista da pelada, pagamentos e sorteio de times. Entra, paga, joga." />
 <meta name="theme-color" content="#37003C" />
 <link rel="manifest" href="/manifest.json" />
 <link rel="apple-touch-icon" href="/icon.png" />
@@ -12,173 +12,216 @@
 
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Futebol de Respeito" />
-<meta property="og:description" content="Entra na lista, paga a tua parte e vê as equipas. Domingo é domingo." />
+<meta property="og:description" content="Entra na lista, paga a sua parte e vê os times. Domingo é domingo." />
 <meta property="og:image" content="https://futebolderespeito.vercel.app/og.png" />
 <meta property="og:url" content="https://futebolderespeito.vercel.app" />
 <meta name="twitter:card" content="summary_large_image" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
 <style>
 :root{
-  --pl:#37003C; --pl-2:#4A0050; --pl-3:#26002A;
-  --ink:#1D0022; --dim:#6B5A70; --faint:#8E7F93;
-  --card:#FFFFFF; --soft:#F4F1F5; --line:rgba(55,0,60,.11);
-  --green:#00FF87; --pink:#E90052; --cyan:#04F5FF;
-  --r:14px; --pad:16px;
+  --pl:#37003C; --pl-2:#520059; --pl-3:#220026; --pl-soft:#5B0063;
+  --ink:#1A001F; --dim:#6E5C73; --faint:#9A8B9E;
+  --card:#FFFFFF; --soft:#F6F3F7; --soft-2:#EDE7EF; --line:rgba(26,0,31,.09);
+  --green:#00FF87; --green-deep:#00C46A; --pink:#E90052; --cyan:#04F5FF;
+
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:28px;
+  --r-lg:18px; --r-md:12px; --r-sm:9px;
+  --ease:cubic-bezier(.4,0,.2,1);
+  --shadow:0 1px 2px rgba(26,0,31,.10), 0 6px 16px rgba(26,0,31,.08);
+  --shadow-lg:0 2px 6px rgba(26,0,31,.14), 0 18px 40px rgba(26,0,31,.16);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{-webkit-text-size-adjust:100%}
 body{
   background:var(--pl); color:var(--ink); min-height:100dvh;
-  font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  padding:env(safe-area-inset-top) 0 calc(28px + env(safe-area-inset-bottom));
+  font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-feature-settings:"cv11","ss01";
+  padding:env(safe-area-inset-top) 0 calc(var(--s6) + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
 }
-.wrap{max-width:560px;margin:0 auto;padding:0 14px;display:flex;flex-direction:column;gap:12px}
-.disp{font-family:Archivo,system-ui,sans-serif;font-weight:800;letter-spacing:-.01em;line-height:1}
-.up{text-transform:uppercase;letter-spacing:.08em}
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(120% 60% at 50% -10%, rgba(255,255,255,.11), transparent 60%);
+}
+.wrap{position:relative;z-index:1;max-width:560px;margin:0 auto;padding:0 var(--s4);
+  display:flex;flex-direction:column;gap:var(--s3)}
+.disp{font-family:Archivo,system-ui,sans-serif;font-weight:800;letter-spacing:-.02em;line-height:1}
+.lbl{font-family:Archivo,system-ui,sans-serif;font-size:10.5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.13em}
 
-/* ---------- cartões brancos ---------- */
-.card{background:var(--card);border-radius:var(--r);padding:var(--pad);
-  box-shadow:0 1px 2px rgba(29,0,34,.18),0 8px 24px rgba(29,0,34,.10)}
-.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
-.card-t{font-family:Archivo,system-ui,sans-serif;font-size:11px;font-weight:700;color:var(--pl);
-  text-transform:uppercase;letter-spacing:.1em}
+/* ---------- cartões ---------- */
+.card{background:var(--card);border-radius:var(--r-lg);padding:var(--s5);box-shadow:var(--shadow);
+  animation:rise .5s var(--ease) both}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s4)}
+.card-t{color:var(--pl)}
+.card-n{color:var(--faint)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* ---------- cartão do jogo ---------- */
-.hero{position:relative;overflow:hidden;border-radius:var(--r);
-  background:linear-gradient(150deg,var(--pl-2) 0%,var(--pl) 58%,var(--pl-3) 100%);
-  padding:20px var(--pad) var(--pad);box-shadow:0 8px 24px rgba(0,0,0,.28)}
-.hero::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+.hero{position:relative;overflow:hidden;border-radius:var(--r-lg);
+  background:linear-gradient(155deg,var(--pl-soft) 0%,var(--pl-2) 40%,var(--pl-3) 100%);
+  padding:var(--s6) var(--s5) var(--s5);box-shadow:var(--shadow-lg);
+  animation:rise .5s var(--ease) both}
+.hero::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
   background:linear-gradient(90deg,var(--green) 0 33.33%,var(--cyan) 33.33% 66.66%,var(--pink) 66.66% 100%)}
-.hero .pitch{position:absolute;inset:0;width:100%;height:100%;opacity:.13;pointer-events:none}
+.hero::after{content:"";position:absolute;width:280px;height:280px;right:-90px;top:-120px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,255,135,.16),transparent 68%);pointer-events:none}
+.hero .pitch{position:absolute;inset:0;width:100%;height:100%;opacity:.1;pointer-events:none}
 .hero-in{position:relative}
-.brand{display:flex;align-items:center;gap:9px;margin-bottom:18px}
-.brand b{font-family:Archivo,system-ui,sans-serif;font-size:12.5px;font-weight:800;color:#fff;
-  letter-spacing:.13em;text-transform:uppercase}
-.kick{display:flex;align-items:flex-end;gap:13px;flex-wrap:wrap}
-.kick .dnum{font-size:62px;color:#fff}
-.kick .dtxt{padding-bottom:7px}
-.kick .dtxt .d1{font-size:18px;color:#fff;text-transform:uppercase;letter-spacing:.03em;font-weight:700}
-.kick .dtxt .d2{font-size:11.5px;color:var(--green);font-weight:700;margin-top:4px;
-  letter-spacing:.1em;text-transform:uppercase}
-.hero-foot{display:flex;gap:7px;margin-top:18px;flex-wrap:wrap}
-.pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.11);
-  border-radius:999px;padding:7px 13px;font-size:12px;color:#fff;text-decoration:none;font-weight:600}
-.pill:active{background:rgba(255,255,255,.2)}
+.brand{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s5)}
+.brand b{font-family:Archivo,system-ui,sans-serif;font-size:12px;font-weight:800;color:#fff;
+  letter-spacing:.16em;text-transform:uppercase}
+.kick{display:flex;align-items:center;gap:var(--s4)}
+.kick .dnum{font-size:66px;color:#fff;letter-spacing:-.04em}
+.kick .dtxt{min-width:0}
+.kick .d1{font-family:Archivo,system-ui,sans-serif;font-size:17px;font-weight:700;color:#fff;
+  text-transform:uppercase;letter-spacing:.02em;line-height:1.15}
+.kick .d2{font-size:12px;color:var(--green);font-weight:600;margin-top:var(--s1);letter-spacing:.02em}
+.hero-foot{display:flex;gap:var(--s2);margin-top:var(--s5);flex-wrap:wrap}
+.pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);
+  border-radius:999px;padding:8px 14px;font-size:12px;color:#fff;text-decoration:none;font-weight:500;
+  transition:background .18s var(--ease)}
+.pill:active{background:rgba(255,255,255,.22)}
+.pill.hot{background:var(--pink)}
 
 /* ---------- botões ---------- */
 button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
-.btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;
-  font-family:Archivo,system-ui,sans-serif;padding:13px 14px;border-radius:10px;
-  font-size:13.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
-  transition:filter .15s,opacity .15s}
-.btn:active{filter:brightness(.92)}
-.btn:disabled{opacity:.35;cursor:default}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%;
+  font-family:Archivo,system-ui,sans-serif;padding:14px var(--s4);border-radius:var(--r-md);
+  font-size:12.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+  transition:transform .18s var(--ease),filter .18s var(--ease),opacity .18s var(--ease)}
+.btn:active{transform:scale(.975);filter:brightness(.95)}
+.btn:disabled{opacity:.32;cursor:default;transform:none}
 .btn-1{background:var(--green);color:var(--pl)}
 .btn-2{background:var(--pl);color:#fff}
-.btn-g{background:transparent;color:var(--pl);border:1.5px solid var(--line)}
-.btn-s{width:auto;padding:9px 14px;font-size:11.5px;border-radius:8px}
+.btn-g{background:var(--soft);color:var(--pl)}
+.btn-s{width:auto;padding:10px var(--s4);font-size:11px;border-radius:var(--r-sm)}
 
 /* ---------- inputs ---------- */
-input,select{font:inherit;width:100%;background:var(--soft);border:1.5px solid transparent;
-  color:var(--ink);border-radius:10px;padding:11px 12px;outline:none}
-input:focus,select:focus{border-color:var(--pl);background:#fff}
+input{font:inherit;width:100%;background:var(--soft);border:1.5px solid transparent;color:var(--ink);
+  border-radius:var(--r-md);padding:13px var(--s3);outline:none;
+  transition:border-color .18s var(--ease),background .18s var(--ease)}
+input:focus{border-color:var(--pl);background:#fff}
 input::placeholder{color:var(--faint)}
-label{display:block;font-family:Archivo,system-ui,sans-serif;font-size:10.5px;font-weight:700;
-  color:var(--pl);margin-bottom:6px;text-transform:uppercase;letter-spacing:.09em}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.field+.field,.grid2+.field,.field+.grid2,.grid2+.grid2{margin-top:12px}
+label{display:block;color:var(--pl);margin-bottom:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.field+.field,.grid2+.field,.field+.grid2,.grid2+.grid2{margin-top:var(--s3)}
+.inline{display:flex;gap:var(--s2)}
 
-/* ---------- a minha vaga ---------- */
-.me-in{display:flex;align-items:center;gap:12px}
-.me-badge{width:46px;height:46px;border-radius:10px;background:var(--pl);color:var(--green);
-  display:grid;place-items:center;flex:none;font-size:16px;font-weight:800}
+/* ---------- sua vaga ---------- */
+.me-in{display:flex;align-items:center;gap:var(--s3)}
+.me-badge{width:48px;height:48px;border-radius:var(--r-md);background:var(--pl);color:var(--green);
+  display:grid;place-items:center;flex:none;font-size:16px}
 .me-txt{flex:1;min-width:0}
-.me-txt b{display:block;font-size:15px}
-.me-txt span{font-size:12px;color:var(--dim)}
+.me-txt b{display:block;font-size:15.5px;font-weight:600;letter-spacing:-.01em}
+.me-txt span{font-size:12.5px;color:var(--dim)}
 
 /* ---------- lista ---------- */
-.sec{font-family:Archivo,system-ui,sans-serif;font-size:10px;font-weight:700;color:var(--faint);
-  margin:15px 0 8px;display:flex;align-items:center;gap:9px;text-transform:uppercase;letter-spacing:.1em}
+.sec{color:var(--faint);margin:var(--s5) 0 var(--s2);display:flex;align-items:center;gap:var(--s2)}
 .sec::after{content:"";flex:1;height:1px;background:var(--line)}
-.row{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;background:var(--soft);
-  border-left:3px solid transparent}
-.row+.row{margin-top:4px}
-.row.mine{border-left-color:var(--pink);background:rgba(233,0,82,.06)}
-.row.sub{opacity:.66}
-.num{width:24px;height:24px;border-radius:6px;background:var(--pl);color:#fff;flex:none;
-  display:grid;place-items:center;font-size:11.5px;font-weight:700}
-.row.mine .num{background:var(--pink)}
-.nm{flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nm i{font-style:normal;color:var(--pink);font-size:9.5px;font-weight:800;margin-left:7px;letter-spacing:.1em}
-.tag{font-family:Archivo,system-ui,sans-serif;font-size:10px;font-weight:700;padding:6px 10px;
-  border-radius:6px;flex:none;text-transform:uppercase;letter-spacing:.06em}
+.row{display:flex;align-items:center;gap:9px;padding:10px;border-radius:var(--r-sm);
+  background:var(--soft);border-left:3px solid transparent;
+  transition:background .18s var(--ease);animation:slide .35s var(--ease) both}
+.row+.row{margin-top:var(--s1)}
+.row.mine{border-left-color:var(--pink);background:rgba(233,0,82,.055)}
+.row.sub{opacity:.62}
+@keyframes slide{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+.num{width:24px;height:24px;border-radius:7px;background:var(--soft-2);color:var(--pl);flex:none;
+  display:grid;place-items:center;font-size:11.5px;font-family:Archivo,sans-serif;font-weight:700}
+.row.mine .num{background:var(--pink);color:#fff}
+.nm{flex:1;min-width:0;font-size:14.5px;font-weight:500;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nm i{font-style:normal;color:var(--pink);font-size:9px;font-weight:800;margin-left:7px;
+  letter-spacing:.12em;font-family:Archivo,sans-serif;vertical-align:1px}
+.tag{font-family:Archivo,system-ui,sans-serif;font-size:9.5px;font-weight:700;padding:6px 9px;
+  border-radius:6px;flex:none;text-transform:uppercase;letter-spacing:.09em;
+  transition:transform .18s var(--ease)}
+.tag:active{transform:scale(.93)}
 .tag-ok{background:var(--green);color:var(--pl)}
-.tag-no{background:var(--pink);color:#fff}
-.x{width:28px;height:28px;border-radius:6px;color:var(--faint);flex:none;font-size:15px}
+.tag-no{background:var(--soft-2);color:var(--dim)}
+.row.mine .tag-no{background:var(--pink);color:#fff}
+.x{width:24px;height:24px;border-radius:6px;color:var(--faint);flex:none;font-size:13px;
+  transition:color .18s var(--ease),background .18s var(--ease)}
 .x:active{background:rgba(233,0,82,.14);color:var(--pink)}
-.empty{text-align:center;color:var(--faint);font-size:13.5px;padding:22px 0}
+.empty{text-align:center;color:var(--faint);font-size:13.5px;padding:var(--s6) 0;line-height:1.6}
 
 /* ---------- pagamentos ---------- */
-.bar{height:8px;border-radius:999px;background:var(--soft);overflow:hidden}
-.bar>i{display:block;height:100%;border-radius:999px;background:var(--green);
-  transition:width .5s cubic-bezier(.2,.8,.2,1)}
-.money{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;gap:10px}
-.money .big{font-size:34px;color:var(--pl)}
-.money .sub{font-size:12px;color:var(--dim);text-align:right}
-.copyrow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--soft);
-  border-radius:9px;padding:10px 12px}
-.copyrow+.copyrow{margin-top:8px}
-.copyrow .k{font-family:Archivo,system-ui,sans-serif;font-size:9.5px;color:var(--faint);
-  font-weight:700;letter-spacing:.11em;text-transform:uppercase}
-.copyrow .v{font-size:13.5px;font-weight:600;margin-top:2px}
+.bar{height:8px;border-radius:999px;background:var(--soft-2);overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:999px;
+  background:linear-gradient(90deg,var(--green-deep),var(--green));
+  transition:width .7s var(--ease)}
+.money{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:var(--s3);gap:var(--s3)}
+.money .big{font-size:36px;color:var(--pl)}
+.money .cap{font-size:12.5px;color:var(--dim);margin-top:3px}
+.money .side{font-size:12.5px;color:var(--dim);text-align:right;line-height:1.35}
+.money .side b{display:block;font-size:16px;color:var(--ink);font-weight:600}
+.copyrow{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);background:var(--soft);
+  border-radius:var(--r-md);padding:12px var(--s3);transition:background .18s var(--ease)}
+.copyrow+.copyrow{margin-top:var(--s2)}
+.copyrow .k{color:var(--faint)}
+.copyrow .v{font-size:13.5px;font-weight:600;margin-top:3px;letter-spacing:-.01em}
 
-/* ---------- equipas ---------- */
-.teams{display:grid;gap:10px}
+/* ---------- times ---------- */
+.teams{display:grid;gap:var(--s3)}
 @media(min-width:520px){.teams{grid-template-columns:repeat(3,1fr)}}
-.team{border-radius:10px;padding:12px;background:var(--soft);border-top:4px solid var(--kit,var(--pl));
-  animation:pop .35s cubic-bezier(.2,.9,.3,1.2) both}
-.team-h{display:flex;align-items:center;gap:8px;padding-bottom:9px;margin-bottom:9px;
+.team{border-radius:var(--r-md);padding:var(--s4);background:var(--soft);
+  border-top:4px solid var(--kit,var(--pl));animation:pop .45s var(--ease) both}
+.team:nth-child(2){animation-delay:.07s}
+.team:nth-child(3){animation-delay:.14s}
+.team-h{display:flex;align-items:center;gap:var(--s2);padding-bottom:10px;margin-bottom:10px;
   border-bottom:1px solid var(--line)}
 .shirt{width:20px;height:20px;flex:none}
-.team-h b{font-family:Archivo,system-ui,sans-serif;font-size:11.5px;font-weight:800;
-  letter-spacing:.09em;text-transform:uppercase;color:var(--pl)}
-.team p{font-size:13.5px;padding:4px 0;font-weight:500}
-.team p+p{border-top:1px solid rgba(55,0,60,.07)}
-@keyframes pop{from{opacity:0;transform:translateY(9px) scale(.97)}to{opacity:1;transform:none}}
+.team-h b{font-family:Archivo,system-ui,sans-serif;font-size:11px;font-weight:800;
+  letter-spacing:.11em;text-transform:uppercase;color:var(--pl)}
+.team p{font-size:13.5px;padding:5px 0;font-weight:500;letter-spacing:-.01em}
+.team p+p{border-top:1px solid rgba(26,0,31,.06)}
+@keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
 .rolling .team{animation:none}
 
 /* ---------- organização ---------- */
-details.org summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
-  font-family:Archivo,system-ui,sans-serif;font-size:11px;font-weight:700;color:var(--pl);
-  letter-spacing:.1em;text-transform:uppercase}
+details.org summary{list-style:none;cursor:pointer;display:flex;align-items:center;
+  justify-content:space-between;color:var(--pl)}
 details.org summary::-webkit-details-marker{display:none}
-details.org[open] summary{margin-bottom:14px}
-details.org summary::after{content:"\25BE";transition:transform .2s}
+details.org[open] summary{margin-bottom:var(--s4)}
+details.org summary::after{content:"\25BE";transition:transform .25s var(--ease);font-size:11px}
 details.org[open] summary::after{transform:rotate(180deg)}
 
-.note{font-size:12.5px;color:var(--ink);background:var(--card);border-left:4px solid var(--pink);
-  border-radius:9px;padding:11px 13px;line-height:1.45;
-  box-shadow:0 1px 2px rgba(29,0,34,.18)}
-.foot{text-align:center;font-size:11px;color:rgba(255,255,255,.66);padding:4px 0 8px;
-  text-transform:uppercase;letter-spacing:.09em;font-weight:600}
-.live{display:inline-flex;align-items:center;gap:6px}
+.note{font-size:13px;color:var(--ink);background:var(--card);border-left:4px solid var(--pink);
+  border-radius:var(--r-md);padding:13px var(--s4);line-height:1.5;box-shadow:var(--shadow);
+  animation:rise .5s var(--ease) both}
+.foot{text-align:center;font-size:10.5px;color:rgba(255,255,255,.62);padding:var(--s1) 0 var(--s2);
+  text-transform:uppercase;letter-spacing:.13em;font-weight:600}
+.live{display:inline-flex;align-items:center;gap:7px}
 .live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--green);
-  animation:blink 1.8s ease-in-out infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--green);
-  color:var(--pl);font-family:Archivo,system-ui,sans-serif;font-size:12px;font-weight:700;
-  letter-spacing:.05em;text-transform:uppercase;padding:12px 20px;border-radius:999px;z-index:9;
-  animation:up .25s ease both;box-shadow:0 8px 24px rgba(0,0,0,.35)}
-@keyframes up{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+  animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--pl);
+  color:#fff;font-family:Archivo,system-ui,sans-serif;font-size:11.5px;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;padding:13px 22px;border-radius:999px;z-index:9;
+  animation:up .3s var(--ease) both;box-shadow:var(--shadow-lg)}
+@keyframes up{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
 .boot{display:grid;place-items:center;min-height:70dvh;color:rgba(255,255,255,.55);font-size:13px}
+
+/* telemóveis estreitos: aperta as margens para o nome não ser cortado */
+@media (max-width:400px){
+  .wrap{padding:0 12px}
+  .card{padding:var(--s4)}
+  .hero{padding:var(--s5) var(--s4) var(--s4)}
+  .kick .dnum{font-size:58px}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-delay:0 !important;
+    transition-duration:.001ms !important}
+}
 </style>
 </head>
 <body>
-<div id="app"><div class="boot">A carregar a pelada…</div></div>
+<div id="app"><div class="boot">Carregando a pelada…</div></div>
 
 <script type="module">
 import { h, render } from "https://esm.sh/preact@10.19.6";
@@ -190,9 +233,9 @@ const html = htm.bind(h);
 /* ============================================================
    CONFIGURAÇÃO
    Muda aqui os dados do grupo. Os dois primeiros valores ligam
-   a app ao Supabase (Project Settings > API). Enquanto
-   estiverem por preencher, a app guarda tudo só neste
-   telemóvel — funciona, mas não é partilhada.
+   o app ao Supabase (Project Settings > API). Enquanto
+   estiverem em branco, o app guarda tudo só neste celular —
+   funciona, mas não é compartilhado.
    ============================================================ */
 const SUPABASE_URL = "COLOCAR_AQUI";
 const SUPABASE_ANON_KEY = "COLOCAR_AQUI";
@@ -208,13 +251,13 @@ const LOCAL_KEY = "fdr:local";
 
 const configured = SUPABASE_URL !== "COLOCAR_AQUI" && SUPABASE_ANON_KEY !== "COLOCAR_AQUI";
 
-// color = cor da camisola, edge = cor da barra do cartão. Separadas porque
-// a camisola branca precisa de ser branca, mas uma barra branca sobre
-// cartão claro não se vê.
+// color = cor da camisa, edge = cor da barra do cartão. Separadas porque
+// a camisa branca precisa ser branca, mas uma barra branca em cima de
+// cartão claro não aparece.
 const KITS = [
   { name: "Coletes", color: "#E90052", edge: "#E90052" },
   { name: "Brancos", color: "#FFFFFF", edge: "#04F5FF" },
-  { name: "Escuros", color: "#37003C", edge: "#37003C" },
+  { name: "Pretos", color: "#37003C", edge: "#37003C" },
 ];
 
 /* ---------------- datas ---------------- */
@@ -229,18 +272,12 @@ function nextSunday(from) {
   return iso(base);
 }
 
-function longDate(d) {
-  return new Date(d + "T00:00:00").toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
-}
-function weekday(d) {
-  return new Date(d + "T00:00:00").toLocaleDateString("pt-PT", { weekday: "long" });
-}
-function dayNum(d) {
-  return new Date(d + "T00:00:00").getDate();
-}
-function monthName(d) {
-  return new Date(d + "T00:00:00").toLocaleDateString("pt-PT", { month: "long" });
-}
+const fmt = (d, o) => new Date(d + "T00:00:00").toLocaleDateString("pt-BR", o);
+const longDate = (d) => fmt(d, { weekday: "long", day: "numeric", month: "long" });
+const weekday = (d) => fmt(d, { weekday: "long" });
+const monthName = (d) => fmt(d, { month: "long" });
+const dayNum = (d) => new Date(d + "T00:00:00").getDate();
+
 function daysAway(d) {
   const a = new Date(today() + "T00:00:00");
   const b = new Date(d + "T00:00:00");
@@ -248,7 +285,7 @@ function daysAway(d) {
 }
 function countdown(d) {
   const n = daysAway(d);
-  if (n < 0) return "já foi";
+  if (n < 0) return "já passou";
   if (n === 0) return "é hoje";
   if (n === 1) return "é amanhã";
   return `faltam ${n} dias`;
@@ -272,8 +309,8 @@ function initials(name) {
 
 /* ============================================================
    CAMADA DE DADOS
-   Duas implementações com a mesma interface. A app não sabe
-   qual está a usar — muda só a linha do "store" no fim.
+   Duas implementações com a mesma interface. O app não sabe
+   qual está usando — muda só a linha do "store" no final.
    ============================================================ */
 function localStore() {
   const read = () => {
@@ -402,14 +439,14 @@ const Crest = () => html`
 const Shirt = ({ color }) => html`
   <svg class="shirt" viewBox="0 0 24 24" aria-hidden="true">
     <path d="M8.5 2 4 4.5 2.5 9l3 1.2V22h13V10.2l3-1.2L20 4.5 15.5 2a3.7 3.7 0 0 1-7 0z"
-      fill=${color} stroke="rgba(29,0,34,.4)" stroke-width=".9" />
+      fill=${color} stroke="rgba(26,0,31,.4)" stroke-width=".9" />
   </svg>`;
 
 function CopyRow({ k, v, onCopy }) {
   return html`
     <div class="copyrow">
       <div>
-        <div class="k">${k}</div>
+        <div class="k lbl">${k}</div>
         <div class="v">${v}</div>
       </div>
       <button class="btn btn-2 btn-s" onClick=${() => onCopy(v, k)}>Copiar</button>
@@ -433,7 +470,7 @@ function App({ store }) {
   const say = useCallback((m) => {
     setToast(m);
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => setToast(""), 1800);
+    timer.current = setTimeout(() => setToast(""), 1900);
   }, []);
 
   const refresh = useCallback(async (date) => {
@@ -464,17 +501,18 @@ function App({ store }) {
     return off;
   }, [store, game && game.game_date]);
 
-  if (!game) return html`<div class="boot">A carregar a pelada…</div>`;
+  if (!game) return html`<div class="boot">Carregando a pelada…</div>`;
 
   const slots = game.slots || DEFAULTS.slots;
   const price = Number(game.price ?? DEFAULTS.price);
   const titulares = players.slice(0, slots);
-  const suplentes = players.slice(slots);
+  const reservas = players.slice(slots);
   const pagos = players.filter((p) => p.paid);
   const pct = players.length ? Math.round((pagos.length / players.length) * 100) : 0;
   const myRow = me ? players.find((p) => p.id === me.id) : null;
   const myIdx = myRow ? players.findIndex((p) => p.id === me.id) : -1;
-  const souSuplente = myIdx >= slots;
+  const souReserva = myIdx >= slots;
+  const lotado = titulares.length >= slots;
 
   async function patch(p) {
     const g = await store.saveGame(game.game_date, p);
@@ -497,7 +535,7 @@ function App({ store }) {
     setNome("");
     setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
     await patch({ teams: null });
-    say(players.length >= slots ? "Ficaste como suplente" : "Estás dentro");
+    say(players.length >= slots ? "Você ficou de reserva" : "Você está dentro");
   }
 
   async function adicionar() {
@@ -551,7 +589,7 @@ function App({ store }) {
       await navigator.clipboard.writeText(txt);
       say(o ? `${o} copiado` : "Copiado");
     } catch {
-      say("Copia à mão, o browser não deixou");
+      say("Copia na mão, o navegador não deixou");
     }
   }
 
@@ -561,16 +599,16 @@ function App({ store }) {
     L.push(`${longDate(game.game_date)} · ${game.kickoff}`);
     L.push(MAPS_LINK);
     L.push("");
-    L.push(`*Convocados (${titulares.length}/${slots})*`);
+    L.push(`*Confirmados (${titulares.length}/${slots})*`);
     titulares.forEach((p, i) => L.push(`${i + 1}. ${p.name} ${p.paid ? "✅" : "⏳"}`));
-    if (suplentes.length) {
+    if (reservas.length) {
       L.push("");
-      L.push("*Suplentes*");
-      suplentes.forEach((p, i) => L.push(`${i + 1}. ${p.name} ${p.paid ? "✅" : "⏳"}`));
+      L.push("*Reservas*");
+      reservas.forEach((p, i) => L.push(`${i + 1}. ${p.name} ${p.paid ? "✅" : "⏳"}`));
     }
     if (game.teams) {
       L.push("");
-      L.push("*Equipas*");
+      L.push("*Times*");
       game.teams.forEach((t, i) => { if (t.length) L.push(`${KITS[i].name}: ${t.join(", ")}`); });
     }
     L.push("");
@@ -584,10 +622,10 @@ function App({ store }) {
 
   const Linha = (p, i, sub) => html`
     <div class=${`row${me && me.id === p.id ? " mine" : ""}${sub ? " sub" : ""}`} key=${p.id}>
-      <span class="num disp">${i + 1}</span>
-      <span class="nm">${p.name}${me && me.id === p.id ? html`<i>TU</i>` : null}</span>
+      <span class="num">${i + 1}</span>
+      <span class="nm">${p.name}${me && me.id === p.id ? html`<i>VOCÊ</i>` : null}</span>
       <button class=${`tag ${p.paid ? "tag-ok" : "tag-no"}`} onClick=${() => togglePago(p)}>
-        ${p.paid ? "Pago" : "Falta"}
+        ${p.paid ? "Pago" : "Pendente"}
       </button>
       <button class="x" onClick=${() => sair(p)} aria-label="Tirar da lista">✕</button>
     </div>`;
@@ -596,7 +634,7 @@ function App({ store }) {
     <div class="wrap">
 
       ${!configured && html`<div class="note">
-        A lista está guardada só neste telemóvel. Para todos verem a mesma, liga o Supabase
+        A lista está salva só neste celular. Para todo mundo ver a mesma, liga o Supabase
         (instruções no README).
       </div>`}
 
@@ -607,14 +645,16 @@ function App({ store }) {
           <div class="kick">
             <div class="dnum disp">${dayNum(game.game_date)}</div>
             <div class="dtxt">
-              <div class="d1 disp">${weekday(game.game_date)}, ${monthName(game.game_date)}</div>
+              <div class="d1">${weekday(game.game_date)}<br />${monthName(game.game_date)}</div>
               <div class="d2">${game.kickoff} · ${countdown(game.game_date)}</div>
             </div>
           </div>
           <div class="hero-foot">
             <a class="pill" href=${MAPS_LINK} target="_blank" rel="noopener noreferrer">\u{1F4CD} ${CAMPO}</a>
-            <span class="pill">${titulares.length}/${slots} ${titulares.length >= slots ? "· lotado" : "vagas"}</span>
-            ${suplentes.length ? html`<span class="pill">+${suplentes.length} ${suplentes.length === 1 ? "suplente" : "suplentes"}</span>` : null}
+            <span class=${`pill${lotado ? " hot" : ""}`}>
+              ${lotado ? "Lotado" : `${titulares.length}/${slots} vagas`}
+            </span>
+            ${reservas.length ? html`<span class="pill">+${reservas.length} ${reservas.length === 1 ? "reserva" : "reservas"}</span>` : null}
           </div>
         </div>
       </div>
@@ -625,19 +665,19 @@ function App({ store }) {
               <div class="me-badge disp">${initials(myRow.name)}</div>
               <div class="me-txt">
                 <b>${myRow.name}</b>
-                <span>${souSuplente ? `Suplente · ${myIdx - slots + 1}º na fila` : `Convocado · posição ${myIdx + 1}`} · ${myRow.paid ? "pago" : `faltam ${eur(price)}`}</span>
+                <span>${souReserva ? `Reserva · ${myIdx - slots + 1}º da fila` : `Confirmado · ${myIdx + 1}º`} · ${myRow.paid ? "pago" : `faltam ${eur(price)}`}</span>
               </div>
               <button class=${`btn btn-s ${myRow.paid ? "btn-g" : "btn-1"}`} onClick=${() => togglePago(myRow)}>
                 ${myRow.paid ? "Pago" : "Já paguei"}
               </button>
             </div>`
           : html`<div>
-              <div class="card-t" style="margin-bottom:10px">A tua vaga</div>
-              <div style="display:flex;gap:8px">
-                <input value=${nome} placeholder="O teu nome"
+              <div class="card-t lbl" style="margin-bottom:10px">Sua vaga</div>
+              <div class="inline">
+                <input value=${nome} placeholder="Seu nome"
                   onInput=${(e) => setNome(e.target.value)}
                   onKeyDown=${(e) => e.key === "Enter" && entrar()} />
-                <button class="btn btn-1 btn-s" style="padding-inline:18px" disabled=${!nome.trim() || busy}
+                <button class="btn btn-1 btn-s" style="padding-inline:20px" disabled=${!nome.trim() || busy}
                   onClick=${entrar}>Entrar</button>
               </div>
             </div>`}
@@ -645,30 +685,30 @@ function App({ store }) {
 
       <div class="card">
         <div class="card-h">
-          <span class="card-t">Convocados</span>
-          <span class="card-t">${titulares.length}/${slots}</span>
+          <span class="card-t lbl">Confirmados</span>
+          <span class="card-n lbl">${titulares.length}/${slots}</span>
         </div>
 
         ${players.length === 0
-          ? html`<div class="empty">Ainda ninguém. Sê o primeiro a entrar.</div>`
+          ? html`<div class="empty">Ninguém ainda.<br />Seja o primeiro a entrar.</div>`
           : html`
             <div>${titulares.map((p, i) => Linha(p, i, false))}</div>
-            ${suplentes.length
-              ? html`<div><div class="sec">Suplentes</div>${suplentes.map((p, i) => Linha(p, i, true))}</div>`
+            ${reservas.length
+              ? html`<div><div class="sec lbl">Reservas</div>${reservas.map((p, i) => Linha(p, i, true))}</div>`
               : null}
           `}
 
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <input value=${outro} placeholder="Juntar outro jogador"
+        <div class="inline" style="margin-top:16px">
+          <input value=${outro} placeholder="Adicionar outro jogador"
             onInput=${(e) => setOutro(e.target.value)}
             onKeyDown=${(e) => e.key === "Enter" && adicionar()} />
-          <button class="btn btn-2 btn-s" style="padding-inline:16px" disabled=${!outro.trim() || busy}
-            onClick=${adicionar}>Juntar</button>
+          <button class="btn btn-g btn-s" style="padding-inline:18px" disabled=${!outro.trim() || busy}
+            onClick=${adicionar}>Add</button>
         </div>
 
         ${players.length > 0 && html`
           <button class="btn btn-2" style="margin-top:8px" onClick=${() => copiar(textoWhatsApp(), "Lista")}>
-            Copiar lista para o WhatsApp
+            Copiar lista pro WhatsApp
           </button>`}
       </div>
 
@@ -676,12 +716,12 @@ function App({ store }) {
         <div class="money">
           <div>
             <div class="big disp">${eur(pagos.length * price)}</div>
-            <div class="sub" style="text-align:left">de ${eur(players.length * price)} · ${eur(price)} cada</div>
+            <div class="cap">de ${eur(players.length * price)} · ${eur(price)} cada</div>
           </div>
-          <div class="sub">${pagos.length}/${players.length}<br />pagaram</div>
+          <div class="side"><b>${pagos.length}/${players.length}</b>pagaram</div>
         </div>
         <div class="bar"><i style=${`width:${pct}%`}></i></div>
-        <div style="margin-top:12px">
+        <div style="margin-top:16px">
           <${CopyRow} k="IBAN" v=${IBAN} onCopy=${copiar} />
           <${CopyRow} k="MB Way" v=${MBWAY} onCopy=${copiar} />
         </div>
@@ -689,14 +729,14 @@ function App({ store }) {
 
       <div class="card">
         <div class="card-h">
-          <span class="card-t">Equipas</span>
+          <span class="card-t lbl">Times</span>
           <button class="btn btn-1 btn-s" disabled=${titulares.length < 3 || rolling} onClick=${sortear}>
-            ${rolling ? "A sortear…" : game.teams ? "Sortear outra vez" : "Sortear"}
+            ${rolling ? "Sorteando…" : game.teams ? "Sortear de novo" : "Sortear"}
           </button>
         </div>
 
         ${titulares.length < 3
-          ? html`<div class="empty">Faltam jogadores. São precisos 3 para dividir equipas.</div>`
+          ? html`<div class="empty">Faltam jogadores.<br />Precisa de 3 para dividir os times.</div>`
           : game.teams
             ? html`<div class=${`teams${rolling ? " rolling" : ""}`}>
                 ${game.teams.map((t, i) => html`
@@ -705,46 +745,46 @@ function App({ store }) {
                     ${t.length ? t.map((n, j) => html`<p key=${j}>${n}</p>`) : html`<p style="opacity:.5">—</p>`}
                   </div>`)}
               </div>`
-            : html`<div class="empty">Por sortear. ${titulares.length} jogadores prontos.</div>`}
+            : html`<div class="empty">Sem sorteio ainda.<br />${titulares.length} jogadores prontos.</div>`}
       </div>
 
       <details class="card org">
-        <summary>Organização</summary>
+        <summary class="lbl">Organização</summary>
         <div class="grid2">
           <div class="field">
-            <label>Data</label>
+            <label class="lbl">Data</label>
             <input type="date" value=${game.game_date} onChange=${(e) => patch({ game_date: e.target.value, kickoff: game.kickoff, slots, price })} />
           </div>
           <div class="field">
-            <label>Hora</label>
+            <label class="lbl">Hora</label>
             <input type="time" value=${game.kickoff} onChange=${(e) => patch({ kickoff: e.target.value })} />
           </div>
         </div>
         <div class="grid2">
           <div class="field">
-            <label>Vagas</label>
+            <label class="lbl">Vagas</label>
             <input type="number" min="3" value=${slots} onChange=${(e) => patch({ slots: Math.max(3, parseInt(e.target.value) || 3), teams: null })} />
           </div>
           <div class="field">
-            <label>Preço por jogador</label>
+            <label class="lbl">Valor por jogador</label>
             <input type="number" min="0" step="0.5" value=${price} onChange=${(e) => patch({ price: Math.max(0, parseFloat(e.target.value) || 0) })} />
           </div>
         </div>
-        <button class="btn btn-g" style="margin-top:14px"
-          onClick=${() => confirm("Abrir o jogo do próximo domingo? A lista desse jogo começa vazia.")
+        <button class="btn btn-g" style="margin-top:16px"
+          onClick=${() => confirm("Abrir o jogo do próximo domingo? A lista dele começa vazia.")
             && patch({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price })}>
           Abrir o próximo domingo
         </button>
         ${me && html`<button class="btn btn-g" style="margin-top:8px"
-          onClick=${() => { localStorage.removeItem(ME_KEY); setMe(null); say("Já não és ninguém aqui"); }}>
-          Esquecer que sou o ${me.name}
+          onClick=${() => { localStorage.removeItem(ME_KEY); setMe(null); say("Beleza, esqueci quem você é"); }}>
+          Não sou mais o ${me.name}
         </button>`}
       </details>
 
       <div class="foot">
         ${store.live
-          ? html`<span class="live">Lista partilhada, atualiza sozinha</span>`
-          : "Guardado só neste telemóvel"}
+          ? html`<span class="live">Lista compartilhada, atualiza sozinha</span>`
+          : "Salvo só neste celular"}
       </div>
     </div>
 
@@ -758,7 +798,7 @@ function App({ store }) {
   try {
     store = configured ? await remoteStore() : localStore();
   } catch (e) {
-    console.error("Supabase falhou, a usar armazenamento local:", e);
+    console.error("Supabase falhou, usando armazenamento local:", e);
     store = localStore();
   }
   render(h(App, { store }), document.getElementById("app"));
