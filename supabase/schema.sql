@@ -4,23 +4,16 @@
 --  Pode rodar de novo sem estragar nada.
 --
 --  QUEM PODE O QUÊ
---    Qualquer pessoa (sem código nenhum): ver o jogo, entrar na
+--    Qualquer pessoa (sem conta nenhuma): ver o jogo, entrar na
 --      lista, e sair da própria vaga.
---    Organizador (com o código secreto): abrir o jogo da próxima
---      semana, mudar hora/vagas/valor, confirmar pagamentos,
---      tirar qualquer pessoa da lista e sortear os times.
+--    Organizador (com login): abrir o jogo da próxima semana,
+--      mudar hora/vagas/valor, confirmar pagamentos, tirar
+--      qualquer pessoa da lista e sortear os times.
 --
---  SEM LOGIN, SEM CONTA. Em vez de email+senha, os 2 organizadores
---  guardam um código no celular deles (tipo uma chave PIX). Toda
---  ação de organizador manda esse código pro servidor, que confere
---  o hash antes de fazer qualquer coisa — é o servidor que decide,
---  não a tela.
+--  Os organizadores logam com email + senha (Supabase Auth) —
+--  ver o final deste arquivo pra criar as 2 contas. Jogadores não
+--  criam conta nenhuma, é só digitar o nome.
 -- ============================================================
-
--- No Supabase, extensões costumam instalar no schema "extensions",
--- não no "public". Cria explicitamente lá — se já existir em outro
--- lugar, o "if not exists" não mexe em nada.
-create extension if not exists pgcrypto with schema extensions;
 
 -- ------------------------------------------------------------
 --  JOGOS
@@ -60,29 +53,25 @@ create table if not exists player_claims (
   token     uuid not null
 );
 
--- ------------------------------------------------------------
---  CÓDIGOS DOS ORGANIZADORES
---  Uma linha por organizador. Guarda só o hash, nunca o código
---  em texto puro — nem o Claude nem ninguém que olhar essa tabela
---  descobre o código de ninguém.
--- ------------------------------------------------------------
-create table if not exists admin_secrets (
-  id    uuid primary key default gen_random_uuid(),
-  label text not null,
-  hash  text not null
-);
+-- Tabelas de versões anteriores deste arquivo que não são mais usadas.
+drop function if exists admin_set_paid(uuid, boolean, text);
+drop function if exists admin_remove_player(uuid, text);
+drop function if exists admin_open_game(date, text, integer, numeric, text);
+drop function if exists admin_update_game(date, text, integer, numeric, text);
+drop function if exists admin_set_teams(date, jsonb, text);
+drop function if exists is_admin(text);
+drop table if exists admin_secrets;
 
 -- ============================================================
 --  REGRAS DE ACESSO
---  games e players: qualquer um lê. Escrever direto na tabela
---  fica bloqueado pra todo mundo — só as funções abaixo escrevem,
---  e cada uma decide sozinha quem pode chamá-la.
---  player_claims e admin_secrets: ninguém lê nem escreve de fora.
+--  games e players: qualquer um lê. Só quem tem login (os 2
+--  organizadores) escreve direto na tabela. Jogadores comuns
+--  entram/saem pelas funções abaixo, sem precisar de conta.
+--  player_claims: ninguém lê nem escreve de fora.
 -- ============================================================
 alter table games          enable row level security;
 alter table players        enable row level security;
 alter table player_claims  enable row level security;
-alter table admin_secrets  enable row level security;
 
 -- Limpa políticas de versões anteriores deste arquivo.
 drop policy if exists "games_acesso_publico"          on games;
@@ -96,33 +85,26 @@ drop policy if exists games_organizador     on games;
 drop policy if exists players_leitura       on players;
 drop policy if exists players_organizador   on players;
 
-create policy games_leitura   on games   for select using (true);
-create policy players_leitura on players for select using (true);
+create policy games_leitura     on games   for select using (true);
+create policy games_organizador on games   for all to authenticated using (true) with check (true);
+create policy players_leitura   on players for select using (true);
+create policy players_organizador on players for all to authenticated using (true) with check (true);
 
 -- ============================================================
---  FUNÇÕES
+--  ENTRAR E SAIR SEM CONTA
 --  security definer = a função corre com permissões elevadas,
---  por isso consegue escrever apesar das regras acima. Cada uma
---  faz só uma coisa, valida o que recebe, e as de organizador
---  conferem o código antes de tocar em qualquer dado.
+--  por isso consegue escrever apesar da regra acima. Cada uma faz
+--  só uma coisa e valida o que recebe.
 -- ============================================================
 
 drop function if exists join_game(date, text, uuid);
 drop function if exists leave_game(uuid, uuid);
-drop function if exists is_admin(text);
-drop function if exists admin_set_paid(uuid, boolean, text);
-drop function if exists admin_remove_player(uuid, text);
-drop function if exists admin_open_game(date, text, integer, numeric, text);
-drop function if exists admin_update_game(date, text, integer, numeric, text);
-drop function if exists admin_set_teams(date, jsonb, text);
-
--- ---------- entrar e sair sem código ----------
 
 create function join_game(p_date date, p_name text, p_token uuid)
 returns uuid
 language plpgsql
 security definer
-set search_path = public, extensions
+set search_path = public
 as $$
 declare
   v_id   uuid;
@@ -146,7 +128,7 @@ create function leave_game(p_id uuid, p_token uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, extensions
+set search_path = public
 as $$
 declare v_ok boolean;
 begin
@@ -157,124 +139,10 @@ begin
   return v_ok;
 end $$;
 
--- ---------- conferir o código do organizador ----------
-
-create function is_admin(p_secret text)
-returns boolean
-language sql
-security definer
-set search_path = public, extensions
-as $$
-  select exists (
-    select 1 from admin_secrets where hash = extensions.crypt(p_secret, hash)
-  );
-$$;
-
--- ---------- ações de organizador ----------
-
-create function admin_set_paid(p_id uuid, p_paid boolean, p_secret text)
-returns boolean
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-begin
-  if not is_admin(p_secret) then raise exception 'Código incorreto'; end if;
-  update players set paid = p_paid where id = p_id;
-  return found;
-end $$;
-
-create function admin_remove_player(p_id uuid, p_secret text)
-returns boolean
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-begin
-  if not is_admin(p_secret) then raise exception 'Código incorreto'; end if;
-  delete from players where id = p_id;
-  return found;
-end $$;
-
--- Cria (ou reabre) o jogo de uma data — usado tanto pro primeiro
--- jogo quanto pra abrir a próxima semana. Não mexe num jogo que já
--- existe além de atualizar hora/vagas/valor.
-create function admin_open_game(p_date date, p_kickoff text, p_slots integer, p_price numeric, p_secret text)
-returns games
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare v_row games;
-begin
-  if not is_admin(p_secret) then raise exception 'Código incorreto'; end if;
-
-  insert into games (game_date, kickoff, slots, price, teams)
-  values (p_date, coalesce(p_kickoff, '10:00'), coalesce(p_slots, 15), coalesce(p_price, 0), null)
-  on conflict (game_date) do update
-    set kickoff = excluded.kickoff, slots = excluded.slots, price = excluded.price
-  returning * into v_row;
-
-  return v_row;
-end $$;
-
--- Muda hora/vagas/valor do jogo atual. Sempre limpa o sorteio,
--- porque mudar vagas muda quem é titular e quem é reserva.
-create function admin_update_game(p_date date, p_kickoff text, p_slots integer, p_price numeric, p_secret text)
-returns games
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare v_row games;
-begin
-  if not is_admin(p_secret) then raise exception 'Código incorreto'; end if;
-
-  update games set
-    kickoff = coalesce(p_kickoff, kickoff),
-    slots   = coalesce(p_slots, slots),
-    price   = coalesce(p_price, price),
-    teams   = null,
-    updated_at = now()
-  where game_date = p_date
-  returning * into v_row;
-
-  return v_row;
-end $$;
-
-create function admin_set_teams(p_date date, p_teams jsonb, p_secret text)
-returns games
-language plpgsql
-security definer
-set search_path = public, extensions
-as $$
-declare v_row games;
-begin
-  if not is_admin(p_secret) then raise exception 'Código incorreto'; end if;
-
-  update games set teams = p_teams, updated_at = now() where game_date = p_date
-  returning * into v_row;
-
-  return v_row;
-end $$;
-
-revoke all on function join_game(date, text, uuid)                          from public;
-revoke all on function leave_game(uuid, uuid)                               from public;
-revoke all on function is_admin(text)                                       from public;
-revoke all on function admin_set_paid(uuid, boolean, text)                  from public;
-revoke all on function admin_remove_player(uuid, text)                      from public;
-revoke all on function admin_open_game(date, text, integer, numeric, text)  from public;
-revoke all on function admin_update_game(date, text, integer, numeric, text) from public;
-revoke all on function admin_set_teams(date, jsonb, text)                   from public;
-
-grant execute on function join_game(date, text, uuid)                          to anon, authenticated;
-grant execute on function leave_game(uuid, uuid)                               to anon, authenticated;
-grant execute on function is_admin(text)                                      to anon, authenticated;
-grant execute on function admin_set_paid(uuid, boolean, text)                  to anon, authenticated;
-grant execute on function admin_remove_player(uuid, text)                      to anon, authenticated;
-grant execute on function admin_open_game(date, text, integer, numeric, text)  to anon, authenticated;
-grant execute on function admin_update_game(date, text, integer, numeric, text) to anon, authenticated;
-grant execute on function admin_set_teams(date, jsonb, text)                   to anon, authenticated;
+revoke all on function join_game(date, text, uuid) from public;
+revoke all on function leave_game(uuid, uuid)      from public;
+grant execute on function join_game(date, text, uuid) to anon, authenticated;
+grant execute on function leave_game(uuid, uuid)      to anon, authenticated;
 
 -- ============================================================
 --  TEMPO REAL
@@ -291,15 +159,15 @@ begin
 end $$;
 
 -- ============================================================
---  ÚLTIMO PASSO — DEPOIS DE RODAR TUDO ACIMA
---  Troque os dois códigos abaixo pelos que só vocês dois vão
---  saber (qualquer texto, quanto mais longo e menos óbvio,
---  melhor), e rode só este bloco separado:
+--  ÚLTIMO PASSO — CRIAR AS CONTAS DOS 2 ORGANIZADORES
+--  Isto não é SQL, é feito pelo painel do Supabase:
 --
---   insert into admin_secrets (label, hash) values
---     ('joao',  extensions.crypt('TROQUE-PELO-CODIGO-DO-JOAO', extensions.gen_salt('bf'))),
---     ('socio', extensions.crypt('TROQUE-PELO-CODIGO-DO-SOCIO', extensions.gen_salt('bf')));
+--  1. Vá em Authentication → Users → Add user → Create new user
+--  2. Preencha email e senha de cada organizador (uma conta por
+--     pessoa) e marque "Auto Confirm User" — assim não precisa
+--     confirmar por email
+--  3. Repita pro segundo organizador
 --
---  Os códigos nunca ficam salvos em texto puro, nem aqui nem no
---  banco — só o hash. Guarda-os num gerenciador de senhas.
+--  As senhas ficam só no Supabase, cifradas — nem olhando o
+--  painel dá pra ver a senha de alguém depois de criada.
 -- ============================================================

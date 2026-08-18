@@ -36,29 +36,21 @@ A chave `anon`/`publishable` é pública por natureza: vai dentro do HTML e qual
 
 ---
 
-## Organizador: sem conta, sem senha de email
+## Organizador: conta com email e senha, só pros 2
 
-Em vez de cadastro, os organizadores usam um **código secreto** — o servidor confere na hora de cada ação; a tela nunca decide sozinha quem pode o quê.
+Jogadores nunca criam conta — só os organizadores, e são só eles que ganham a autorização extra (confirmar pagamento, remover alguém, sortear os times, abrir o jogo da semana). Quem tem a conta aparece identificado no topo do app enquanto estiver logado ("Organizador · fulano@email.com"), então dá pra saber quem mexeu no quê.
 
-**Configurar os códigos** (depois de rodar o `schema.sql`, uma única vez, no SQL Editor):
+**Criar as 2 contas** (depois de rodar o `schema.sql`, uma única vez, pelo painel — não é SQL):
 
-```sql
-insert into admin_secrets (label, hash) values
-  ('joao',  extensions.crypt('TROQUE-PELO-CODIGO-DO-JOAO', extensions.gen_salt('bf'))),
-  ('socio', extensions.crypt('TROQUE-PELO-CODIGO-DO-SOCIO', extensions.gen_salt('bf')));
-```
+1. No Supabase, vá em **Authentication → Users → Add user → Create new user**
+2. Preencha o email e uma senha forte de um organizador, e marque **Auto Confirm User** (assim não precisa confirmar por email)
+3. Repita pro segundo organizador
 
-Troque os dois textos entre aspas pelos códigos que só vocês dois vão saber (frase, palavra, o que for — quanto mais comprido e menos óbvio, melhor). O banco guarda só o hash: nem olhando a tabela dá pra descobrir o código de alguém.
+**Usar:** no rodapé do app tem um link discreto, "Área do organizador". Entra com email e senha, e pronto — a sessão dura semanas nesse celular, não precisa logar de novo toda vez. Pra sair, usa o botão "Sair" que aparece no topo quando o modo organizador está ativo.
 
-**Usar:** no rodapé do app tem um link discreto, "Área do organizador". Digita o código lá, e pronto — fica lembrado nesse celular, não precisa repetir toda semana. Pra sair do modo organizador, usa o botão "Sair" que aparece no topo quando ele está ativo.
+**Tirar o acesso de alguém:** no painel, **Authentication → Users**, abre a conta da pessoa e clica em **Delete user** (ou só troca a senha, se for temporário). Vale na próxima ação que a pessoa tentar fazer.
 
-**Revogar o acesso de alguém:**
-```sql
-delete from admin_secrets where label = 'socio';
-```
-O código antigo para de funcionar na próxima ação que essa pessoa tentar — o app percebe sozinho e volta a tratar o celular dela como o de um jogador comum.
-
-**Se um código vazar ou for esquecido**, é só rodar o `insert` de novo com um valor novo pro mesmo `label` (ou apagar e inserir outra vez).
+**Esqueceu a senha:** no mesmo painel, abre a conta e usa **Reset password**, ou apaga e cria de novo.
 
 ---
 

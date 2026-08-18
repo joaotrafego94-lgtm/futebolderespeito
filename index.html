@@ -287,7 +287,6 @@ const CAMPO = "Ver o campo no mapa";
 
 const DEFAULTS = { kickoff: "10:00", slots: 15, price: 5 };
 const ME_KEY = "fdr:me";
-const ORG_KEY = "fdr:orgkey";
 const LOCAL_KEY = "fdr:local";
 
 const configured = SUPABASE_URL !== "COLOCAR_AQUI" && SUPABASE_ANON_KEY !== "COLOCAR_AQUI";
@@ -351,15 +350,19 @@ function initials(name) {
 
 /* ============================================================
    CAMADA DE DADOS
-   Duas implementações com a mesma interface. Sem contas, sem
-   email — o "login" do organizador é só um código secreto que o
-   servidor confere a cada ação (função is_admin no Postgres).
-   Errar o código nunca trava a lista dos jogadores comuns.
+   Duas implementações com a mesma interface. Jogadores nunca
+   criam conta — entram e saem pelas funções join_game/leave_game
+   (token no celular). Os 2 organizadores logam com email + senha
+   (Supabase Auth); as ações deles só funcionam com sessão porque
+   as regras do banco (RLS) exigem "authenticated", não porque
+   este arquivo decide.
 
-   store.live          : true só no Supabase
-   store.verifyCode()  : confere o código, sem mudar nada
-   store.adminXxx(...) : ações de organizador — sempre recebem
-                         o código como último parâmetro
+   store.live      : true só no Supabase
+   store.auth      : só existe no remoteStore — signIn/signOut/
+                     onChange/user, pros 2 organizadores
+   store.adminXxx  : ações de organizador; no modo local (sem
+                     Supabase) qualquer um é organizador, porque
+                     é um telemóvel só
    ============================================================ */
 function localStore() {
   const read = () => {
@@ -394,8 +397,7 @@ function localStore() {
     },
     subscribe() { return () => {}; },
     // No modo local (sem Supabase) é um telemóvel só: quem abre já
-    // controla tudo, não existe conceito de organizador.
-    async verifyCode() { return true; },
+    // controla tudo, não existe conceito de organizador nem de login.
     async adminSetPaid(id, paid) {
       const s = read();
       s.players = (s.players || []).map((p) => (p.id === id ? { ...p, paid } : p));
@@ -438,6 +440,26 @@ async function remoteStore() {
 
   return {
     live: true,
+    // auth: só existe no remoteStore. Os jogadores nunca tocam nisto —
+    // é só pros 2 organizadores, que logam com email + senha (contas
+    // criadas no painel do Supabase, ver o final do schema.sql).
+    auth: {
+      async user() {
+        const { data } = await sb.auth.getUser();
+        return data && data.user ? data.user : null;
+      },
+      async signIn(email, password) {
+        const { error } = await sb.auth.signInWithPassword({ email, password });
+        return { error };
+      },
+      async signOut() {
+        await sb.auth.signOut();
+      },
+      onChange(cb) {
+        const { data } = sb.auth.onAuthStateChange((_ev, session) => cb(session ? session.user : null));
+        return () => data.subscription.unsubscribe();
+      },
+    },
     async currentGame() {
       const { data } = await sb.from("games").select("*").gte("game_date", today())
         .order("game_date", { ascending: true }).limit(1);
@@ -449,9 +471,9 @@ async function remoteStore() {
       if (error) { console.error(error); return []; }
       return data.map((r) => ({ id: r.id, name: r.name, paid: r.paid }));
     },
-    // Sem código: entra pela função join_game, que dá um token —
-    // é esse token que depois prova, sem senha nenhuma, que o próprio
-    // celular pode tirar essa vaga de volta.
+    // Sem conta: entra pela função join_game, que dá um token — é esse
+    // token que depois prova, sem senha nenhuma, que o próprio celular
+    // pode tirar essa vaga de volta.
     async addPlayer(date, name, token) {
       const { data, error } = await sb.rpc("join_game", { p_date: date, p_name: name, p_token: token });
       if (error) { console.error(error); return null; }
@@ -469,41 +491,42 @@ async function remoteStore() {
         .subscribe();
       return () => sb.removeChannel(ch);
     },
-    // Confere o código no servidor sem mudar nada — usado só na hora
-    // de entrar no modo organizador.
-    async verifyCode(code) {
-      const { data, error } = await sb.rpc("is_admin", { p_secret: code });
+    // Tudo daqui pra baixo só funciona logado — a política do banco
+    // (RLS "to authenticated") recusa sem sessão, não é este código
+    // que decide.
+    async adminSetPaid(id, paid) {
+      const { error } = await sb.from("players").update({ paid }).eq("id", id);
       if (error) { console.error(error); return false; }
-      return !!data;
+      return true;
     },
-    async adminSetPaid(id, paid, code) {
-      const { data, error } = await sb.rpc("admin_set_paid", { p_id: id, p_paid: paid, p_secret: code });
+    async adminRemovePlayer(id) {
+      const { error } = await sb.from("players").delete().eq("id", id);
       if (error) { console.error(error); return false; }
-      return !!data;
+      return true;
     },
-    async adminRemovePlayer(id, code) {
-      const { data, error } = await sb.rpc("admin_remove_player", { p_id: id, p_secret: code });
-      if (error) { console.error(error); return false; }
-      return !!data;
-    },
-    async adminOpenGame(patch, code) {
-      const { data, error } = await sb.rpc("admin_open_game", {
-        p_date: patch.game_date || nextSunday(), p_kickoff: patch.kickoff || DEFAULTS.kickoff,
-        p_slots: patch.slots || DEFAULTS.slots, p_price: patch.price ?? DEFAULTS.price, p_secret: code,
-      });
+    async adminOpenGame(patch) {
+      const row = {
+        game_date: patch.game_date || nextSunday(),
+        kickoff: patch.kickoff || DEFAULTS.kickoff,
+        slots: patch.slots || DEFAULTS.slots,
+        price: patch.price ?? DEFAULTS.price,
+        teams: null,
+      };
+      const { data, error } = await sb.from("games").upsert(row).select().single();
       if (error) { console.error(error); return null; }
       return data;
     },
-    async adminUpdateGame(date, patch, code) {
-      const { data, error } = await sb.rpc("admin_update_game", {
-        p_date: date, p_kickoff: patch.kickoff ?? null, p_slots: patch.slots ?? null,
-        p_price: patch.price ?? null, p_secret: code,
-      });
+    async adminUpdateGame(date, patch) {
+      const { data, error } = await sb.from("games")
+        .update({ ...patch, teams: null, updated_at: new Date().toISOString() })
+        .eq("game_date", date).select().single();
       if (error) { console.error(error); return null; }
       return data;
     },
-    async adminSetTeams(date, teams, code) {
-      const { data, error } = await sb.rpc("admin_set_teams", { p_date: date, p_teams: teams, p_secret: code });
+    async adminSetTeams(date, teams) {
+      const { data, error } = await sb.from("games")
+        .update({ teams, updated_at: new Date().toISOString() })
+        .eq("game_date", date).select().single();
       if (error) { console.error(error); return null; }
       return data;
     },
@@ -550,7 +573,8 @@ function CopyRow({ k, v, onCopy }) {
 }
 
 function LoginModal({ onClose, onSubmit, err, busy }) {
-  const [code, setCode] = useState("");
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
   return html`
     <div class="overlay" onClick=${(e) => e.target === e.currentTarget && onClose()}>
       <div class="modal">
@@ -559,17 +583,23 @@ function LoginModal({ onClose, onSubmit, err, busy }) {
           <button class="modal-close" onClick=${onClose} aria-label="Fechar">✕</button>
         </div>
         <div class="field">
-          <label class="lbl">Código do organizador</label>
-          <input type="password" autocomplete="off" value=${code}
-            onInput=${(e) => setCode(e.target.value)}
-            onKeyDown=${(e) => e.key === "Enter" && onSubmit(code)} />
+          <label class="lbl">Email</label>
+          <input type="email" autocomplete="username" value=${email}
+            onInput=${(e) => setEmail(e.target.value)}
+            onKeyDown=${(e) => e.key === "Enter" && onSubmit(email, pass)} />
+        </div>
+        <div class="field">
+          <label class="lbl">Senha</label>
+          <input type="password" autocomplete="current-password" value=${pass}
+            onInput=${(e) => setPass(e.target.value)}
+            onKeyDown=${(e) => e.key === "Enter" && onSubmit(email, pass)} />
         </div>
         ${err && html`<div class="modal-err">${err}</div>`}
-        <button class="btn btn-2" style="margin-top:16px" disabled=${!code.trim() || busy}
-          onClick=${() => onSubmit(code)}>
-          ${busy ? "Conferindo…" : "Entrar"}
+        <button class="btn btn-2" style="margin-top:16px" disabled=${!email.trim() || !pass || busy}
+          onClick=${() => onSubmit(email, pass)}>
+          ${busy ? "Entrando…" : "Entrar"}
         </button>
-        <div class="modal-hint">Só quem organiza a pelada tem esse código. Jogador não precisa disso — é só entrar na lista aí embaixo.</div>
+        <div class="modal-hint">Só quem organiza a pelada tem essa conta. Jogador não precisa disso — é só entrar na lista aí embaixo.</div>
       </div>
     </div>`;
 }
@@ -598,7 +628,7 @@ function App({ store }) {
   const [game, setGame] = useState(undefined); // undefined = carregando, null = sem jogo aberto
   const [players, setPlayers] = useState([]);
   const [me, setMe] = useState(() => { try { return JSON.parse(localStorage.getItem(ME_KEY)); } catch { return null; } });
-  const [orgKey, setOrgKey] = useState("");
+  const [user, setUser] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginErr, setLoginErr] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
@@ -611,7 +641,7 @@ function App({ store }) {
   const [busy, setBusy] = useState(false);
   const timer = useRef(null);
 
-  const isOrganizer = store.live ? !!orgKey : true;
+  const isOrganizer = store.live ? !!user : true;
 
   const say = useCallback((m) => {
     setToast(m);
@@ -638,21 +668,15 @@ function App({ store }) {
     return () => { alive = false; };
   }, [store]);
 
-  // Um código guardado de uma sessão anterior só vale depois de o
-  // servidor confirmar de novo — assim, se o código for trocado ou
-  // revogado, o app simplesmente volta a tratar este celular como
-  // um jogador comum, sem ficar tentando e falhando.
+  // A sessão do organizador fica salva pelo próprio Supabase (dura
+  // semanas) — só confirma no arranque se ainda tem alguém logado, e
+  // fica escutando login/logout pra atualizar a tela na hora.
   useEffect(() => {
-    if (!store.live) return;
-    const saved = localStorage.getItem(ORG_KEY);
-    if (!saved) return;
+    if (!store.live || !store.auth) return;
     let alive = true;
-    store.verifyCode(saved).then((ok) => {
-      if (!alive) return;
-      if (ok) setOrgKey(saved);
-      else localStorage.removeItem(ORG_KEY);
-    });
-    return () => { alive = false; };
+    store.auth.user().then((u) => alive && setUser(u));
+    const off = store.auth.onChange((u) => setUser(u));
+    return () => { alive = false; off(); };
   }, [store]);
 
   useEffect(() => {
@@ -673,21 +697,18 @@ function App({ store }) {
     return off;
   }, [store, game && game.game_date]);
 
-  async function fazerLogin(code) {
+  async function fazerLogin(email, password) {
     setLoginBusy(true);
     setLoginErr("");
-    const ok = await store.verifyCode(code);
+    const { error } = await store.auth.signIn(email, password);
     setLoginBusy(false);
-    if (!ok) return setLoginErr("Código incorreto");
-    localStorage.setItem(ORG_KEY, code);
-    setOrgKey(code);
+    if (error) return setLoginErr("Email ou senha incorretos");
     setLoginOpen(false);
-    say("Modo organizador ativado");
+    say("Login feito");
   }
 
-  function sairOrganizador() {
-    localStorage.removeItem(ORG_KEY);
-    setOrgKey("");
+  async function sairOrganizador() {
+    await store.auth.signOut();
     say("Saiu do modo organizador");
   }
 
@@ -712,7 +733,7 @@ function App({ store }) {
     return html`
       <div class="wrap">
         ${isOrganizer && store.live && html`
-          <div class="ob"><b>Modo organizador ativo</b><button onClick=${sairOrganizador}>Sair</button></div>`}
+          <div class="ob"><b>Organizador · ${user.email}</b><button onClick=${sairOrganizador}>Sair</button></div>`}
         <div class="card" style="text-align:center;padding:36px 20px">
           <div class="card-t lbl" style="margin-bottom:10px">Sem jogo marcado</div>
           <div class="empty" style="padding:0 0 20px">
@@ -722,7 +743,7 @@ function App({ store }) {
           </div>
           ${isOrganizer && html`
             <button class="btn btn-1" onClick=${async () => {
-              const g = await store.adminOpenGame({}, orgKey);
+              const g = await store.adminOpenGame({});
               if (g) { setGame(g); say("Jogo aberto"); } else say("Não deu pra abrir o jogo");
             }}>Abrir domingo, ${weekday(nextSunday())} que vem</button>`}
         </div>
@@ -786,7 +807,7 @@ function App({ store }) {
     if (!isOrganizer) return;
     const novo = !p.paid;
     setPlayers((l) => l.map((x) => (x.id === p.id ? { ...x, paid: novo } : x)));
-    const ok = await store.adminSetPaid(p.id, novo, orgKey);
+    const ok = await store.adminSetPaid(p.id, novo);
     if (!ok) { setPlayers((l) => l.map((x) => (x.id === p.id ? { ...x, paid: !novo } : x))); say("Não deu pra salvar"); }
   }
 
@@ -795,12 +816,12 @@ function App({ store }) {
     if (!isOrganizer && !souEu) return;
     if (!(await askConfirm(`Tirar ${p.name} da lista?`, "Tirar"))) return;
     const ok = isOrganizer
-      ? await store.adminRemovePlayer(p.id, orgKey)
+      ? await store.adminRemovePlayer(p.id)
       : await store.removePlayer(p.id, me.token);
     if (!ok) return say("Não consegui remover");
     setPlayers((l) => l.filter((x) => x.id !== p.id));
     if (souEu) { localStorage.removeItem(ME_KEY); setMe(null); }
-    if (isOrganizer) await store.adminSetTeams(game.game_date, null, orgKey).then((g) => g && setGame(g));
+    if (isOrganizer) await store.adminSetTeams(game.game_date, null).then((g) => g && setGame(g));
   }
 
   function sortear() {
@@ -815,7 +836,7 @@ function App({ store }) {
       s.forEach((n, i) => prev[i % 3].push(n));
       if (t >= 11) {
         clearInterval(iv);
-        const g = await store.adminSetTeams(game.game_date, prev, orgKey);
+        const g = await store.adminSetTeams(game.game_date, prev);
         rollingRef.current = false;
         setRolling(false);
         if (g) setGame(g); else say("Não deu pra salvar o sorteio");
@@ -826,13 +847,13 @@ function App({ store }) {
   }
 
   async function salvarOrganizacao(patch) {
-    const g = await store.adminUpdateGame(game.game_date, patch, orgKey);
+    const g = await store.adminUpdateGame(game.game_date, patch);
     if (g) setGame(g); else say("Não deu pra salvar");
   }
 
   async function abrirProximoDomingo() {
     if (!(await askConfirm("Abrir o jogo do próximo domingo? A lista dele começa vazia.", "Abrir"))) return;
-    const g = await store.adminOpenGame({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price }, orgKey);
+    const g = await store.adminOpenGame({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price });
     if (g) { setGame(g); refresh(g.game_date); say("Próximo domingo aberto"); } else say("Não deu pra abrir");
   }
 
@@ -892,7 +913,7 @@ function App({ store }) {
     <div class="wrap">
 
       ${isOrganizer && store.live && html`
-        <div class="ob"><b>Modo organizador ativo</b><button onClick=${sairOrganizador}>Sair</button></div>`}
+        <div class="ob"><b>Organizador · ${user.email}</b><button onClick=${sairOrganizador}>Sair</button></div>`}
 
       ${!store.live && html`<div class="note">
         A lista está salva só neste celular. Para todo mundo ver a mesma, liga o Supabase
