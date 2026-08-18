@@ -1,6 +1,6 @@
 # Futebol de Respeito
 
-App para organizar a pelada de domingo: lista de confirmados, reservas automáticas, controle de pagamentos (IBAN / MB Way) e sorteio de três times.
+App para organizar a pelada de domingo: lista de confirmados, fila de pagamento, reservas automáticas e sorteio de três times.
 
 Site estático, sem processo de build. Roda direto no navegador.
 
@@ -11,10 +11,12 @@ Site estático, sem processo de build. Roda direto no navegador.
 ## Como funciona
 
 - **Um jogo de cada vez.** O app mostra sempre o próximo jogo com data igual ou posterior a hoje. Todo mundo que abre o link vê o mesmo jogo, a mesma hora e a mesma lista.
-- **Cada um entra sozinho.** Quem abre escreve o nome e clica em Entrar. O celular guarda quem é, e a partir daí o app trata a pessoa pelo nome, destaca a linha dela, e deixa ela sair da própria vaga quando quiser.
-- **Reservas automáticas.** Quem entra depois de as vagas esgotarem fica em Reservas, por ordem de chegada.
-- **Só o organizador confirma pagamento, remove alguém, sorteia os times e abre o jogo da semana.** Todo o resto (entrar, sair da própria vaga, ver a lista) é livre pra qualquer um. Ver a seção **Organizador** abaixo.
-- **Uma mensagem pro WhatsApp.** O botão copia a lista já formatada, com confirmados, reservas, times, quanto falta pagar e o IBAN.
+- **A vaga só conta depois de paga.** Quem entra escreve o nome e paga na hora, pelo Stripe (cartão, MB Way, Klarna, Bancontact — o que estiver ativo na conta). Até o pagamento ser confirmado, a pessoa fica em **Aguardando pagamento**, sem ocupar vaga. Quem paga primeiro entra primeiro — mesmo que tenha escrito o nome depois de outra pessoa. Isso é de propósito: existe pra ninguém segurar a vaga sem pagar.
+- **Confirmação automática.** O Stripe avisa o app sozinho quando o pagamento é aprovado — ninguém precisa clicar em nada pra isso acontecer. O toggle manual (organizador) continua existindo como reserva, pra quando o Stripe falhar ou alguém pagar por fora excepcionalmente.
+- **Reservas automáticas.** Quem paga depois de as vagas esgotarem fica em Reservas, por ordem de pagamento.
+- **Aviso de prazo.** Quem ainda não pagou vê um aviso vermelho com a contagem até sexta-feira (2 dias antes do jogo).
+- **Só o organizador remove alguém, sorteia os times e abre o jogo da semana.** Ver a seção **Organizador** abaixo.
+- **Uma mensagem pro WhatsApp.** O botão copia a lista já formatada, com confirmados, reservas, quem ainda está pagando, e os times.
 
 ---
 
@@ -36,9 +38,32 @@ A chave `anon`/`publishable` é pública por natureza: vai dentro do HTML e qual
 
 ---
 
+## Ativar o pagamento automático (Stripe)
+
+Sem isto o app funciona, mas ninguém consegue pagar pelo app — o botão "Pagar com Stripe" só aparece quando o Supabase está ligado, e falha (com aviso na tela, sem travar nada) se as funções abaixo não estiverem publicadas.
+
+**O que é preciso:**
+
+1. Uma conta Stripe (quem já tem um link de pagamento do Stripe já tem conta).
+2. Pegar a **chave secreta** — painel do Stripe → **Desenvolvedores → Chaves de API** → "Chave secreta" (começa com `sk_test_` pra testar, ou `sk_live_` pra valer).
+3. Pegar a **chave de serviço** do Supabase — painel do Supabase → **Settings → API** → chave `service_role`. Essa chave dá acesso total ao banco: nunca cola ela em nenhum outro lugar além do passo abaixo.
+4. No painel do Supabase → **Edge Functions**, criar duas funções (o painel deixa colar o código direto num editor, sem precisar instalar nada):
+   - `stripe-create-session` — cola o conteúdo de `supabase/functions/stripe-create-session/index.ts`
+   - `stripe-verify-session` — cola o conteúdo de `supabase/functions/stripe-verify-session/index.ts`
+5. Em cada uma das duas funções, na aba **Secrets**, adicionar:
+   - `STRIPE_SECRET_KEY` — a chave do passo 2
+   - `SUPABASE_SERVICE_ROLE_KEY` — a chave do passo 3
+6. Clicar em **Deploy** nas duas.
+
+**Testar antes de valer:** usa a chave `sk_test_...` primeiro, e paga com um [cartão de teste do Stripe](https://stripe.com/docs/testing) (nenhum dinheiro de verdade se mexe). Só depois de ver o pagamento confirmar sozinho no app, troca a chave pela `sk_live_...`.
+
+O valor cobrado vem sempre do campo **Valor por jogador** do jogo daquela semana — nunca fica preso a um número fixo. Ninguém no navegador consegue mudar esse valor: as duas funções sempre confirmam o preço direto no banco antes de cobrar ou de aceitar como pago.
+
+---
+
 ## Organizador: conta com email e senha, só pros 2
 
-Jogadores nunca criam conta — só os organizadores, e são só eles que ganham a autorização extra (confirmar pagamento, remover alguém, sortear os times, abrir o jogo da semana). Quem tem a conta aparece identificado no topo do app enquanto estiver logado ("Organizador · fulano@email.com"), então dá pra saber quem mexeu no quê.
+Jogadores nunca criam conta — só os organizadores, e são só eles que ganham a autorização extra (remover alguém, sortear os times, abrir o jogo da semana, e confirmar pagamento manualmente se o Stripe falhar). Quem tem a conta aparece identificado no topo do app enquanto estiver logado ("Organizador · fulano@email.com"), então dá pra saber quem mexeu no quê.
 
 **Criar as 2 contas** (depois de rodar o `schema.sql`, uma única vez, pelo painel — não é SQL):
 
@@ -60,8 +85,6 @@ No topo do `<script type="module">` em `index.html`:
 
 | Constante | O que é |
 |---|---|
-| `IBAN` | Conta que recebe o dinheiro |
-| `MBWAY` | Número de MB Way |
 | `MAPS_LINK` | Link do Google Maps para o campo |
 | `CAMPO` | Texto do botão do mapa |
 | `DEFAULTS` | Hora, vagas e valor padrão de um jogo novo |
@@ -74,11 +97,13 @@ Hora, vagas e valor do jogo atual mudam-se dentro do próprio app, na seção **
 ## Estrutura
 
 ```
-index.html           App completo (Preact + htm, sem build)
-manifest.json         Instalar no celular como app
-icon.svg / icon.png   Ícone
-og.png                Imagem do link compartilhado no WhatsApp
-supabase/schema.sql   Tabelas, funções e regras de acesso
+index.html                          App completo (Preact + htm, sem build)
+manifest.json                       Instalar no celular como app
+icon.svg / icon.png                 Ícone
+og.png                              Imagem do link compartilhado no WhatsApp
+supabase/schema.sql                 Tabelas, funções e regras de acesso
+supabase/functions/stripe-create-session   Cria a cobrança no Stripe
+supabase/functions/stripe-verify-session   Confirma o pagamento e libera a vaga
 ```
 
 ## Deploy

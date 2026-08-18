@@ -37,8 +37,14 @@ create table if not exists players (
   game_date  date not null references games (game_date) on delete cascade,
   name       text not null,
   paid       boolean not null default false,
+  paid_at    timestamptz,
   created_at timestamptz not null default now()
 );
+
+-- Versões anteriores deste arquivo não tinham paid_at. Sem isto,
+-- "quem paga primeiro" não tem como ser calculado — paid sozinho
+-- só diz SE alguém pagou, não QUANDO.
+alter table players add column if not exists paid_at timestamptz;
 
 create index if not exists players_game_date_idx on players (game_date, created_at);
 

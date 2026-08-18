@@ -27,6 +27,7 @@
   --ink:#0A2617; --dim:#5E7267; --faint:#8A9D92;
   --card:#FFFFFF; --soft:#F2F6F3; --soft-2:#E7EEE9; --line:rgba(10,38,23,.09);
   --gold:#FFCC00; --gold-deep:#E0A800; --blue:#0057B8; --mint:#00C853; --amber:#FF7A1A;
+  --red:#D6293E; --red-deep:#8C0F20;
 
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:28px;
   --r-lg:18px; --r-md:12px; --r-sm:9px;
@@ -212,6 +213,15 @@ details.org[open] summary::after{transform:rotate(180deg)}
   animation:rise .5s var(--ease) both}
 .note code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
   background:var(--soft-2);padding:2px 6px;border-radius:5px}
+
+/* ---------- aviso de pagamento pendente ---------- */
+.pay-alert{background:linear-gradient(155deg,var(--red) 0%,var(--red-deep) 100%);
+  border-radius:var(--r-lg);padding:var(--s4) var(--s5);color:#fff;text-align:center;
+  box-shadow:var(--shadow-lg);animation:rise .5s var(--ease) both, pulse 2.2s ease-in-out infinite}
+.pay-alert .pa-head{font-family:Archivo,system-ui,sans-serif;font-weight:800;font-size:15px;
+  letter-spacing:.03em;text-transform:uppercase}
+.pay-alert .pa-body{font-size:13px;margin-top:6px;line-height:1.5;opacity:.95}
+@keyframes pulse{0%,100%{box-shadow:var(--shadow-lg)}50%{box-shadow:0 0 0 7px rgba(214,41,62,.22),var(--shadow-lg)}}
 .foot{text-align:center;padding:var(--s2) 0 var(--s2);display:flex;flex-direction:column;
   align-items:center;gap:6px}
 .foot .status{font-size:10.5px;color:rgba(255,255,255,.62);text-transform:uppercase;
@@ -280,10 +290,11 @@ const html = htm.bind(h);
 const SUPABASE_URL = "https://fvdlajeblaqifjtyezvn.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_Qmj4oO4GqM_nA6OxjFqnOA_C67pKCZ0";
 
-const IBAN = "PT50 0007 0000 0658 0592 5323";
-const MBWAY = "+351 914 068 950";
 const MAPS_LINK = "https://maps.app.goo.gl/aCSuyV77kXDmsYV47?g_st=ic";
 const CAMPO = "Ver o campo no mapa";
+// Edge Functions do Supabase — confirmam pagamento de verdade via
+// Stripe (ver supabase/functions/). SUPABASE_URL já vem de cima.
+const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
 const DEFAULTS = { kickoff: "10:00", slots: 15, price: 5 };
 const ME_KEY = "fdr:me";
@@ -333,6 +344,24 @@ function countdown(d) {
 
 const eur = (n) => `${Number(n || 0).toFixed(2).replace(".", ",").replace(",00", "")}€`;
 const uuid = () => crypto.randomUUID();
+
+// Sexta-feira antes do jogo (que é sempre domingo) — prazo informal
+// pra pagar antes que o organizador possa liberar a vaga pra outra
+// pessoa.
+function fridayBefore(gameDateISO) {
+  const d = new Date(gameDateISO + "T23:59:59");
+  d.setDate(d.getDate() - 2);
+  return d;
+}
+
+function avisoPagamento(gameDateISO) {
+  const friday = fridayBefore(gameDateISO);
+  const n = daysAway(iso(friday));
+  if (n > 1) return { corpo: `Faltam ${n} dias até sexta. Depois disso o organizador pode tirar seu nome da lista pra abrir vaga pra quem tá esperando.` };
+  if (n === 1) return { corpo: "Amanhã é sexta. Não deixa pra última hora — sua vaga não tá garantida." };
+  if (n === 0) return { corpo: "HOJE é o prazo. Paga agora ou corre o risco de sair da lista." };
+  return { corpo: "Já passou da sexta e você ainda não pagou. Pode ser tirado da lista a qualquer momento." };
+}
 
 function shuffle(arr) {
   const a = [...arr];
@@ -384,7 +413,7 @@ function localStore() {
     },
     async addPlayer(date, name) {
       const s = read();
-      const row = { id: `l${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name, paid: false };
+      const row = { id: `l${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name, paid: false, paid_at: null };
       s.players = [...(s.players || []), row];
       write(s);
       return row;
@@ -400,7 +429,8 @@ function localStore() {
     // controla tudo, não existe conceito de organizador nem de login.
     async adminSetPaid(id, paid) {
       const s = read();
-      s.players = (s.players || []).map((p) => (p.id === id ? { ...p, paid } : p));
+      const paid_at = paid ? new Date().toISOString() : null;
+      s.players = (s.players || []).map((p) => (p.id === id ? { ...p, paid, paid_at } : p));
       write(s);
       return true;
     },
@@ -469,7 +499,7 @@ async function remoteStore() {
       const { data, error } = await sb.from("players").select("*").eq("game_date", date)
         .order("created_at", { ascending: true });
       if (error) { console.error(error); return []; }
-      return data.map((r) => ({ id: r.id, name: r.name, paid: r.paid }));
+      return data.map((r) => ({ id: r.id, name: r.name, paid: r.paid, paid_at: r.paid_at }));
     },
     // Sem conta: entra pela função join_game, que dá um token — é esse
     // token que depois prova, sem senha nenhuma, que o próprio celular
@@ -477,7 +507,7 @@ async function remoteStore() {
     async addPlayer(date, name, token) {
       const { data, error } = await sb.rpc("join_game", { p_date: date, p_name: name, p_token: token });
       if (error) { console.error(error); return null; }
-      return { id: data, name, paid: false };
+      return { id: data, name, paid: false, paid_at: null };
     },
     async removePlayer(id, token) {
       const { data, error } = await sb.rpc("leave_game", { p_id: id, p_token: token });
@@ -495,7 +525,8 @@ async function remoteStore() {
     // (RLS "to authenticated") recusa sem sessão, não é este código
     // que decide.
     async adminSetPaid(id, paid) {
-      const { error } = await sb.from("players").update({ paid }).eq("id", id);
+      const paid_at = paid ? new Date().toISOString() : null;
+      const { error } = await sb.from("players").update({ paid, paid_at }).eq("id", id);
       if (error) { console.error(error); return false; }
       return true;
     },
@@ -561,16 +592,6 @@ const Shirt = ({ color }) => html`
       fill=${color} stroke="rgba(10,38,23,.4)" stroke-width=".9" />
   </svg>`;
 
-function CopyRow({ k, v, onCopy }) {
-  return html`
-    <div class="copyrow">
-      <div>
-        <div class="k lbl">${k}</div>
-        <div class="v">${v}</div>
-      </div>
-      <button class="btn btn-2 btn-s" onClick=${() => onCopy(v, k)}>Copiar</button>
-    </div>`;
-}
 
 function LoginModal({ onClose, onSubmit, err, busy }) {
   const [email, setEmail] = useState("");
@@ -621,6 +642,7 @@ function ConfirmModal({ message, confirmLabel, onYes, onNo }) {
     </div>`;
 }
 
+
 /* ============================================================
    APP
    ============================================================ */
@@ -634,12 +656,22 @@ function App({ store }) {
   const [loginBusy, setLoginBusy] = useState(false);
   const [nome, setNome] = useState("");
   const [outro, setOutro] = useState("");
+  const [step, setStep] = useState("nome"); // "nome" | "pagamento" — fluxo de Sua Vaga
   const [rolling, setRolling] = useState(false);
   const rollingRef = useRef(false);
   const [confirmState, setConfirmState] = useState(null);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
+  const [stripeBusy, setStripeBusy] = useState(false);
   const timer = useRef(null);
+
+  // Só pra forçar a contagem regressiva do aviso de pagamento a
+  // atualizar sozinha enquanto a pessoa fica com o app aberto.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setTick((t) => t + 1), 60000);
+    return () => clearInterval(iv);
+  }, []);
 
   const isOrganizer = store.live ? !!user : true;
 
@@ -677,6 +709,32 @@ function App({ store }) {
     store.auth.user().then((u) => alive && setUser(u));
     const off = store.auth.onChange((u) => setUser(u));
     return () => { alive = false; off(); };
+  }, [store]);
+
+  // O Stripe manda a pessoa de volta pra cá com ?session_id=... na
+  // URL depois do pagamento. Confere no servidor se foi pago de
+  // verdade — o realtime (efeito abaixo) já cuida de atualizar a
+  // lista sozinho assim que o banco mudar.
+  useEffect(() => {
+    if (!store.live) return;
+    const params = new URLSearchParams(location.search);
+    const sessionId = params.get("session_id");
+    if (!sessionId) return;
+    history.replaceState({}, "", location.pathname);
+    (async () => {
+      try {
+        const resp = await fetch(`${EDGE_BASE}/stripe-verify-session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId }),
+        });
+        const data = await resp.json();
+        say(data.ok ? "Pagamento confirmado! Você já está na lista." : "Não deu pra confirmar sozinho — fala com o organizador se já pagaste.");
+      } catch (e) {
+        console.error(e);
+        say("Não deu pra confirmar sozinho — fala com o organizador se já pagaste.");
+      }
+    })();
   }, [store]);
 
   useEffect(() => {
@@ -757,13 +815,19 @@ function App({ store }) {
 
   const slots = game.slots || DEFAULTS.slots;
   const price = Number(game.price ?? DEFAULTS.price);
-  const titulares = players.slice(0, slots);
-  const reservas = players.slice(slots);
-  const pagos = players.filter((p) => p.paid);
+  // Quem paga primeiro entra primeiro — por isso pagos ordena por
+  // paid_at, não pela ordem em que os nomes chegaram (created_at).
+  // Um simples .filter() preservaria a ordem de chegada por dentro,
+  // o que anularia o incentivo de pagar cedo.
+  const pagos = players.filter((p) => p.paid).sort((a, b) => new Date(a.paid_at) - new Date(b.paid_at));
+  const pendentes = players.filter((p) => !p.paid);
+  const titulares = pagos.slice(0, slots);
+  const reservas = pagos.slice(slots);
   const pct = players.length ? Math.round((pagos.length / players.length) * 100) : 0;
   const myRow = me ? players.find((p) => p.id === me.id) : null;
-  const myIdx = myRow ? players.findIndex((p) => p.id === me.id) : -1;
-  const souReserva = myIdx >= slots;
+  const myPaidIdx = myRow && myRow.paid ? pagos.findIndex((p) => p.id === me.id) : -1;
+  const myPendingIdx = myRow && !myRow.paid ? pendentes.findIndex((p) => p.id === me.id) : -1;
+  const souReserva = myPaidIdx >= slots;
   const lotado = titulares.length >= slots;
 
   // Já tem esse nome na lista? Não impede (pode ser mesmo dois "Lucas"
@@ -773,9 +837,13 @@ function App({ store }) {
     return players.some((p) => p.name.trim().toLowerCase() === n.toLowerCase());
   }
 
-  async function entrar() {
+  // Cria o jogador (cai em Aguardando pagamento, igual a qualquer
+  // entrada) e, se o Supabase estiver ligado, manda direto pro
+  // checkout do Stripe — quem confirma o pagamento é o Stripe, não
+  // um clique de "já paguei".
+  async function pagarComStripe() {
     const n = nome.trim();
-    if (!n || busy) return;
+    if (!n || busy || stripeBusy) return;
     const duplicado = jaExiste(n);
     setBusy(true);
     const tok = uuid();
@@ -786,8 +854,27 @@ function App({ store }) {
     localStorage.setItem(ME_KEY, JSON.stringify(novo));
     setMe(novo);
     setNome("");
+    setStep("nome");
     setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
-    say(duplicado ? `Já tem um ${n} na lista — de olho pra não confundir` : players.length >= slots ? "Você ficou de reserva" : "Você está dentro");
+    if (duplicado) say(`Já tem um ${n} na lista — de olho pra não confundir`);
+
+    if (!store.live) return say("Falta o organizador confirmar seu pagamento");
+
+    setStripeBusy(true);
+    try {
+      const resp = await fetch(`${EDGE_BASE}/stripe-create-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ player_id: row.id }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.url) { setStripeBusy(false); return say(data.error || "Não deu pra abrir o Stripe"); }
+      location.href = data.url;
+    } catch (e) {
+      console.error(e);
+      setStripeBusy(false);
+      say("Não deu pra abrir o Stripe");
+    }
   }
 
   async function adicionar() {
@@ -806,9 +893,14 @@ function App({ store }) {
   async function togglePago(p) {
     if (!isOrganizer) return;
     const novo = !p.paid;
-    setPlayers((l) => l.map((x) => (x.id === p.id ? { ...x, paid: novo } : x)));
+    const novoPaidAt = novo ? new Date().toISOString() : null;
+    const paidAtAntigo = p.paid_at;
+    setPlayers((l) => l.map((x) => (x.id === p.id ? { ...x, paid: novo, paid_at: novoPaidAt } : x)));
     const ok = await store.adminSetPaid(p.id, novo);
-    if (!ok) { setPlayers((l) => l.map((x) => (x.id === p.id ? { ...x, paid: !novo } : x))); say("Não deu pra salvar"); }
+    if (!ok) {
+      setPlayers((l) => l.map((x) => (x.id === p.id ? { ...x, paid: !novo, paid_at: paidAtAntigo } : x)));
+      say("Não deu pra salvar");
+    }
   }
 
   async function sair(p) {
@@ -866,6 +958,7 @@ function App({ store }) {
     }
   }
 
+
   function textoWhatsApp() {
     const L = [];
     L.push("*FUTEBOL DE RESPEITO*");
@@ -879,6 +972,11 @@ function App({ store }) {
       L.push("*Reservas*");
       reservas.forEach((p, i) => L.push(`${i + 1}. ${p.name} ${p.paid ? "✅" : "⏳"}`));
     }
+    if (pendentes.length) {
+      L.push("");
+      L.push("*Aguardando pagamento*");
+      pendentes.forEach((p, i) => L.push(`${i + 1}. ${p.name} ⏳`));
+    }
     if (game.teams) {
       L.push("");
       L.push("*Times*");
@@ -886,8 +984,6 @@ function App({ store }) {
     }
     L.push("");
     L.push(`${eur(price)} cada · ${pagos.length}/${players.length} já pagaram`);
-    L.push(`IBAN: ${IBAN}`);
-    L.push(`MB Way: ${MBWAY}`);
     L.push("");
     L.push(location.origin);
     return L.join("\n");
@@ -941,25 +1037,48 @@ function App({ store }) {
         </div>
       </div>
 
+      ${myRow && !myRow.paid && html`
+        <div class="pay-alert">
+          <div class="pa-head">⚠️ Paga logo, camarada</div>
+          <div class="pa-body">${avisoPagamento(game.game_date).corpo}</div>
+        </div>`}
+
       <div class="card">
         ${myRow
           ? html`<div class="me-in">
               <div class="me-badge disp">${initials(myRow.name)}</div>
               <div class="me-txt">
                 <b>${myRow.name}</b>
-                <span>${souReserva ? `Reserva · ${myIdx - slots + 1}º da fila` : `Confirmado · ${myIdx + 1}º`} · ${myRow.paid ? "pago" : `faltam ${eur(price)}`}</span>
+                ${!myRow.paid
+                  ? html`<span>Aguardando pagamento · ${myPendingIdx + 1}º na fila pra pagar<br />Faltam ${eur(price)}. Sua vaga só conta depois do pagamento confirmado.</span>`
+                  : html`<span>${souReserva ? `Reserva · ${myPaidIdx - slots + 1}º da fila · entra se alguém sair` : `Confirmado · ${myPaidIdx + 1}º · vaga garantida`}</span>`}
               </div>
             </div>`
-          : html`<div>
-              <div class="card-t lbl" style="margin-bottom:10px">Sua vaga</div>
-              <div class="inline">
-                <input value=${nome} placeholder="Seu nome"
-                  onInput=${(e) => setNome(e.target.value)}
-                  onKeyDown=${(e) => e.key === "Enter" && entrar()} />
-                <button class="btn btn-1 btn-s" style="padding-inline:20px" disabled=${!nome.trim() || busy}
-                  onClick=${entrar}>Entrar</button>
-              </div>
-            </div>`}
+          : step === "nome"
+            ? html`<div>
+                <div class="card-t lbl" style="margin-bottom:10px">Sua vaga</div>
+                <div class="inline">
+                  <input value=${nome} placeholder="Seu nome"
+                    onInput=${(e) => setNome(e.target.value)}
+                    onKeyDown=${(e) => e.key === "Enter" && nome.trim() && setStep("pagamento")} />
+                  <button class="btn btn-1 btn-s" style="padding-inline:20px" disabled=${!nome.trim()}
+                    onClick=${() => setStep("pagamento")}>Continuar</button>
+                </div>
+              </div>`
+            : html`<div>
+                <div class="card-t lbl" style="margin-bottom:4px">Pagamento de ${nome.trim()}</div>
+                <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
+                  ${store.live
+                    ? `${eur(price)} pra garantir a vaga. Ao clicar você vai pro Stripe pagar — a vaga vira real assim que o pagamento for aprovado, sem precisar avisar ninguém.`
+                    : `${eur(price)} pra garantir a vaga. Sem o Supabase ligado, quem organiza confirma manualmente.`}
+                </div>
+                <div class="inline">
+                  <button class="btn btn-g btn-s" onClick=${() => setStep("nome")}>Voltar</button>
+                  <button class="btn btn-1" disabled=${busy || stripeBusy} onClick=${pagarComStripe}>
+                    ${busy || stripeBusy ? "Abrindo…" : store.live ? `Pagar ${eur(price)} com Stripe` : "Entrar na lista"}
+                  </button>
+                </div>
+              </div>`}
       </div>
 
       <div class="card">
@@ -974,6 +1093,15 @@ function App({ store }) {
             <div>${titulares.map((p, i) => Linha(p, i, false))}</div>
             ${reservas.length
               ? html`<div><div class="sec lbl">Reservas</div>${reservas.map((p, i) => Linha(p, i, true))}</div>`
+              : null}
+            ${pendentes.length
+              ? html`<div>
+                  <div class="sec lbl">Aguardando pagamento</div>
+                  <div style="font-size:11px;color:var(--faint);font-style:italic;margin:-2px 0 8px">
+                    Quem paga primeiro entra primeiro — mesmo quem chegou depois.
+                  </div>
+                  ${pendentes.map((p, i) => Linha(p, i, true))}
+                </div>`
               : null}
           `}
 
@@ -1000,10 +1128,6 @@ function App({ store }) {
           <div class="side"><b>${pagos.length}/${players.length}</b>pagaram</div>
         </div>
         <div class="bar"><i style=${`width:${pct}%`}></i></div>
-        <div style="margin-top:16px">
-          <${CopyRow} k="IBAN" v=${IBAN} onCopy=${copiar} />
-          <${CopyRow} k="MB Way" v=${MBWAY} onCopy=${copiar} />
-        </div>
       </div>
 
       <div class="card">
