@@ -190,6 +190,8 @@ details.org[open] summary{margin-bottom:var(--s4)}
 details.org summary::after{content:"\25BE";transition:transform .25s var(--ease);font-size:11px}
 details.org[open] summary::after{transform:rotate(180deg)}
 
+.note code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+  background:var(--soft-2);padding:2px 6px;border-radius:5px}
 .note{font-size:13px;color:var(--ink);background:var(--card);border-left:4px solid var(--pink);
   border-radius:var(--r-md);padding:13px var(--s4);line-height:1.5;box-shadow:var(--shadow);
   animation:rise .5s var(--ease) both}
@@ -237,8 +239,8 @@ const html = htm.bind(h);
    estiverem em branco, o app guarda tudo só neste celular —
    funciona, mas não é compartilhado.
    ============================================================ */
-const SUPABASE_URL = "COLOCAR_AQUI";
-const SUPABASE_ANON_KEY = "COLOCAR_AQUI";
+const SUPABASE_URL = "https://fvdlajeblaqifjtyezvn.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_Qmj4oO4GqM_nA6OxjFqnOA_C67pKCZ0";
 
 const IBAN = "PT50 0007 0000 0658 0592 5323";
 const MBWAY = "+351 914 068 950";
@@ -359,8 +361,16 @@ function localStore() {
 }
 
 async function remoteStore() {
-  const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2.39.7");
+  // v2 recente: as chaves novas (sb_publishable_...) não são JWT, e as
+  // versões antigas do cliente não lidam bem com elas.
+  const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Verifica que as tabelas existem antes de assumir o Supabase. Sem isto,
+  // com o schema.sql por correr, o app parecia funcionar mas não gravava
+  // nada: cada gesto dava erro em silêncio e a lista desaparecia ao recarregar.
+  const { error: semTabelas } = await sb.from("games").select("game_date").limit(1);
+  if (semTabelas) throw new Error(`Supabase sem as tabelas (${semTabelas.message}). Corre o supabase/schema.sql.`);
 
   return {
     live: true,
@@ -633,9 +643,12 @@ function App({ store }) {
   return html`
     <div class="wrap">
 
-      ${!configured && html`<div class="note">
-        A lista está salva só neste celular. Para todo mundo ver a mesma, liga o Supabase
-        (instruções no README).
+      ${!store.live && html`<div class="note">
+        ${configured
+          ? html`<b>Falta rodar o SQL.</b> O Supabase está ligado, mas as tabelas ainda não existem,
+              então a lista está salva só neste celular. Abre o SQL Editor do Supabase e roda o arquivo <code>supabase/schema.sql</code>.`
+          : html`A lista está salva só neste celular. Para todo mundo ver a mesma, liga o Supabase
+              (instruções no README).`}
       </div>`}
 
       <div class="hero">
