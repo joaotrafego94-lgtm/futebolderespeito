@@ -100,6 +100,7 @@ body::before{
 
 /* ---------- botões ---------- */
 button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:6px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%;
   font-family:Archivo,system-ui,sans-serif;padding:14px var(--s4);border-radius:var(--r-md);
   font-size:12.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
@@ -573,6 +574,23 @@ function LoginModal({ onClose, onSubmit, err, busy }) {
     </div>`;
 }
 
+function ConfirmModal({ message, confirmLabel, onYes, onNo }) {
+  return html`
+    <div class="overlay" onClick=${(e) => e.target === e.currentTarget && onNo()}>
+      <div class="modal">
+        <div class="modal-h">
+          <b>Confirma?</b>
+          <button class="modal-close" onClick=${onNo} aria-label="Fechar">✕</button>
+        </div>
+        <div style="font-size:14px;line-height:1.5;color:var(--ink)">${message}</div>
+        <div class="inline" style="margin-top:18px">
+          <button class="btn btn-g" onClick=${onNo}>Cancelar</button>
+          <button class="btn btn-2" onClick=${onYes}>${confirmLabel || "Confirmar"}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 /* ============================================================
    APP
    ============================================================ */
@@ -587,6 +605,8 @@ function App({ store }) {
   const [nome, setNome] = useState("");
   const [outro, setOutro] = useState("");
   const [rolling, setRolling] = useState(false);
+  const rollingRef = useRef(false);
+  const [confirmState, setConfirmState] = useState(null);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const timer = useRef(null);
@@ -638,6 +658,11 @@ function App({ store }) {
   useEffect(() => {
     if (!game) return;
     const off = store.subscribe(game.game_date, async () => {
+      // Enquanto a animação do sorteio está rolando, o estado do time
+      // muda localmente a cada instante — se um evento em tempo real
+      // chegar nesse meio-tempo e sobrescrever o jogo, a animação trava
+      // ou pisca. Ignora esses eventos até o sorteio terminar.
+      if (rollingRef.current) return;
       const g = await store.currentGame();
       setGame(g);
       if (g) {
@@ -664,6 +689,20 @@ function App({ store }) {
     localStorage.removeItem(ORG_KEY);
     setOrgKey("");
     say("Saiu do modo organizador");
+  }
+
+  // Substitui o confirm() do navegador — aquele popup cinza do sistema
+  // que quebra a cara do app bem na hora mais delicada (tirar alguém
+  // da lista, fechar a semana). Devolve uma Promise pra poder usar
+  // "await askConfirm(...)" como se fosse o confirm() nativo.
+  function askConfirm(message, confirmLabel) {
+    return new Promise((resolve) => {
+      setConfirmState({
+        message, confirmLabel,
+        onYes: () => { setConfirmState(null); resolve(true); },
+        onNo: () => { setConfirmState(null); resolve(false); },
+      });
+    });
   }
 
   if (game === undefined) return html`<div class="boot">Carregando a pelada…</div>`;
@@ -706,9 +745,17 @@ function App({ store }) {
   const souReserva = myIdx >= slots;
   const lotado = titulares.length >= slots;
 
+  // Já tem esse nome na lista? Não impede (pode ser mesmo dois "Lucas"
+  // no grupo), só avisa — assim quem organiza sabe que precisa olhar o
+  // sobrenome antes de marcar pago ou remover alguém.
+  function jaExiste(n) {
+    return players.some((p) => p.name.trim().toLowerCase() === n.toLowerCase());
+  }
+
   async function entrar() {
     const n = nome.trim();
     if (!n || busy) return;
+    const duplicado = jaExiste(n);
     setBusy(true);
     const tok = uuid();
     const row = await store.addPlayer(game.game_date, n, tok);
@@ -719,19 +766,20 @@ function App({ store }) {
     setMe(novo);
     setNome("");
     setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
-    say(players.length >= slots ? "Você ficou de reserva" : "Você está dentro");
+    say(duplicado ? `Já tem um ${n} na lista — de olho pra não confundir` : players.length >= slots ? "Você ficou de reserva" : "Você está dentro");
   }
 
   async function adicionar() {
     const n = outro.trim();
     if (!n || busy) return;
+    const duplicado = jaExiste(n);
     setBusy(true);
     const row = await store.addPlayer(game.game_date, n, uuid());
     setBusy(false);
     if (!row) return say("Não deu pra adicionar");
     setOutro("");
     setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
-    say(`${row.name} na lista`);
+    say(duplicado ? `Já tem um ${n} na lista — de olho pra não confundir` : `${row.name} na lista`);
   }
 
   async function togglePago(p) {
@@ -745,7 +793,7 @@ function App({ store }) {
   async function sair(p) {
     const souEu = me && me.id === p.id;
     if (!isOrganizer && !souEu) return;
-    if (!confirm(`Tirar ${p.name} da lista?`)) return;
+    if (!(await askConfirm(`Tirar ${p.name} da lista?`, "Tirar"))) return;
     const ok = isOrganizer
       ? await store.adminRemovePlayer(p.id, orgKey)
       : await store.removePlayer(p.id, me.token);
@@ -757,6 +805,7 @@ function App({ store }) {
 
   function sortear() {
     if (!isOrganizer || titulares.length < 3 || rolling) return;
+    rollingRef.current = true;
     setRolling(true);
     let t = 0;
     const iv = setInterval(async () => {
@@ -766,8 +815,9 @@ function App({ store }) {
       s.forEach((n, i) => prev[i % 3].push(n));
       if (t >= 11) {
         clearInterval(iv);
-        setRolling(false);
         const g = await store.adminSetTeams(game.game_date, prev, orgKey);
+        rollingRef.current = false;
+        setRolling(false);
         if (g) setGame(g); else say("Não deu pra salvar o sorteio");
       } else {
         setGame((g) => ({ ...g, teams: prev }));
@@ -781,7 +831,7 @@ function App({ store }) {
   }
 
   async function abrirProximoDomingo() {
-    if (!confirm("Abrir o jogo do próximo domingo? A lista dele começa vazia.")) return;
+    if (!(await askConfirm("Abrir o jogo do próximo domingo? A lista dele começa vazia.", "Abrir"))) return;
     const g = await store.adminOpenGame({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price }, orgKey);
     if (g) { setGame(g); refresh(g.game_date); say("Próximo domingo aberto"); } else say("Não deu pra abrir");
   }
@@ -1003,6 +1053,7 @@ function App({ store }) {
     </div>
 
     ${loginOpen && h(LoginModal, { onClose: () => { setLoginOpen(false); setLoginErr(""); }, onSubmit: fazerLogin, err: loginErr, busy: loginBusy })}
+    ${confirmState && h(ConfirmModal, confirmState)}
     ${toast && html`<div class="toast">${toast}</div>`}
   `;
 }

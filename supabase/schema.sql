@@ -17,7 +17,10 @@
 --  não a tela.
 -- ============================================================
 
-create extension if not exists pgcrypto;
+-- No Supabase, extensões costumam instalar no schema "extensions",
+-- não no "public". Cria explicitamente lá — se já existir em outro
+-- lugar, o "if not exists" não mexe em nada.
+create extension if not exists pgcrypto with schema extensions;
 
 -- ------------------------------------------------------------
 --  JOGOS
@@ -119,7 +122,7 @@ create function join_game(p_date date, p_name text, p_token uuid)
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_id   uuid;
@@ -143,7 +146,7 @@ create function leave_game(p_id uuid, p_token uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare v_ok boolean;
 begin
@@ -160,10 +163,10 @@ create function is_admin(p_secret text)
 returns boolean
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select exists (
-    select 1 from admin_secrets where hash = crypt(p_secret, hash)
+    select 1 from admin_secrets where hash = extensions.crypt(p_secret, hash)
   );
 $$;
 
@@ -173,7 +176,7 @@ create function admin_set_paid(p_id uuid, p_paid boolean, p_secret text)
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   if not is_admin(p_secret) then raise exception 'Código incorreto'; end if;
@@ -185,7 +188,7 @@ create function admin_remove_player(p_id uuid, p_secret text)
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   if not is_admin(p_secret) then raise exception 'Código incorreto'; end if;
@@ -200,7 +203,7 @@ create function admin_open_game(p_date date, p_kickoff text, p_slots integer, p_
 returns games
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare v_row games;
 begin
@@ -221,7 +224,7 @@ create function admin_update_game(p_date date, p_kickoff text, p_slots integer, 
 returns games
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare v_row games;
 begin
@@ -243,7 +246,7 @@ create function admin_set_teams(p_date date, p_teams jsonb, p_secret text)
 returns games
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare v_row games;
 begin
@@ -294,8 +297,8 @@ end $$;
 --  melhor), e rode só este bloco separado:
 --
 --   insert into admin_secrets (label, hash) values
---     ('joao',  crypt('TROQUE-PELO-CODIGO-DO-JOAO', gen_salt('bf'))),
---     ('socio', crypt('TROQUE-PELO-CODIGO-DO-SOCIO', gen_salt('bf')));
+--     ('joao',  extensions.crypt('TROQUE-PELO-CODIGO-DO-JOAO', extensions.gen_salt('bf'))),
+--     ('socio', extensions.crypt('TROQUE-PELO-CODIGO-DO-SOCIO', extensions.gen_salt('bf')));
 --
 --  Os códigos nunca ficam salvos em texto puro, nem aqui nem no
 --  banco — só o hash. Guarda-os num gerenciador de senhas.

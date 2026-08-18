@@ -44,8 +44,8 @@ Em vez de cadastro, os organizadores usam um **código secreto** — o servidor 
 
 ```sql
 insert into admin_secrets (label, hash) values
-  ('joao',  crypt('TROQUE-PELO-CODIGO-DO-JOAO', gen_salt('bf'))),
-  ('socio', crypt('TROQUE-PELO-CODIGO-DO-SOCIO', gen_salt('bf')));
+  ('joao',  extensions.crypt('TROQUE-PELO-CODIGO-DO-JOAO', extensions.gen_salt('bf'))),
+  ('socio', extensions.crypt('TROQUE-PELO-CODIGO-DO-SOCIO', extensions.gen_salt('bf')));
 ```
 
 Troque os dois textos entre aspas pelos códigos que só vocês dois vão saber (frase, palavra, o que for — quanto mais comprido e menos óbvio, melhor). O banco guarda só o hash: nem olhando a tabela dá pra descobrir o código de alguém.
