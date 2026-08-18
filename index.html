@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Futebol de Respeito · A pelada de domingo</title>
 <meta name="description" content="Lista da pelada, pagamentos e sorteio de times. Entra, paga, joga." />
-<meta name="theme-color" content="#37003C" />
+<meta name="theme-color" content="#0B3D24" />
 <link rel="manifest" href="/manifest.json" />
 <link rel="apple-touch-icon" href="/icon.png" />
 <link rel="icon" href="/icon.svg" type="image/svg+xml" />
@@ -23,21 +23,21 @@
 
 <style>
 :root{
-  --pl:#37003C; --pl-2:#520059; --pl-3:#220026; --pl-soft:#5B0063;
-  --ink:#1A001F; --dim:#6E5C73; --faint:#9A8B9E;
-  --card:#FFFFFF; --soft:#F6F3F7; --soft-2:#EDE7EF; --line:rgba(26,0,31,.09);
-  --green:#00FF87; --green-deep:#00C46A; --pink:#E90052; --cyan:#04F5FF;
+  --bg:#0B3D24; --bg-2:#0F5A34; --bg-3:#052616; --bg-soft:#137A44;
+  --ink:#0A2617; --dim:#5E7267; --faint:#8A9D92;
+  --card:#FFFFFF; --soft:#F2F6F3; --soft-2:#E7EEE9; --line:rgba(10,38,23,.09);
+  --gold:#FFCC00; --gold-deep:#E0A800; --blue:#0057B8; --mint:#00C853; --amber:#FF7A1A;
 
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:28px;
   --r-lg:18px; --r-md:12px; --r-sm:9px;
   --ease:cubic-bezier(.4,0,.2,1);
-  --shadow:0 1px 2px rgba(26,0,31,.10), 0 6px 16px rgba(26,0,31,.08);
-  --shadow-lg:0 2px 6px rgba(26,0,31,.14), 0 18px 40px rgba(26,0,31,.16);
+  --shadow:0 1px 2px rgba(10,38,23,.10), 0 6px 16px rgba(10,38,23,.08);
+  --shadow-lg:0 2px 6px rgba(10,38,23,.14), 0 18px 40px rgba(10,38,23,.16);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{-webkit-text-size-adjust:100%}
 body{
-  background:var(--pl); color:var(--ink); min-height:100dvh;
+  background:var(--bg); color:var(--ink); min-height:100dvh;
   font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   font-feature-settings:"cv11","ss01";
   padding:env(safe-area-inset-top) 0 calc(var(--s6) + env(safe-area-inset-bottom));
@@ -45,7 +45,7 @@ body{
 }
 body::before{
   content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:radial-gradient(120% 60% at 50% -10%, rgba(255,255,255,.11), transparent 60%);
+  background:radial-gradient(120% 60% at 50% -10%, rgba(255,255,255,.10), transparent 60%);
 }
 .wrap{position:relative;z-index:1;max-width:560px;margin:0 auto;padding:0 var(--s4);
   display:flex;flex-direction:column;gap:var(--s3)}
@@ -56,20 +56,30 @@ body::before{
 /* ---------- cartões ---------- */
 .card{background:var(--card);border-radius:var(--r-lg);padding:var(--s5);box-shadow:var(--shadow);
   animation:rise .5s var(--ease) both}
+.card.editable{box-shadow:var(--shadow),inset 3px 0 0 var(--amber)}
 .card-h{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);margin-bottom:var(--s4)}
-.card-t{color:var(--pl)}
+.card-t{color:var(--bg)}
 .card-n{color:var(--faint)}
 @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
+/* ---------- faixa do organizador ---------- */
+.ob{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;
+  gap:var(--s3);background:var(--blue);color:#fff;border-radius:999px;padding:9px 8px 9px 16px;
+  margin-bottom:2px;box-shadow:var(--shadow-lg);animation:rise .4s var(--ease) both}
+.ob b{font-family:Archivo,system-ui,sans-serif;font-size:11px;font-weight:800;letter-spacing:.05em}
+.ob button{font-family:Archivo,system-ui,sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;background:rgba(255,255,255,.18);color:#fff;padding:8px 13px;border-radius:999px}
+.ob button:active{background:rgba(255,255,255,.3)}
+
 /* ---------- cartão do jogo ---------- */
 .hero{position:relative;overflow:hidden;border-radius:var(--r-lg);
-  background:linear-gradient(155deg,var(--pl-soft) 0%,var(--pl-2) 40%,var(--pl-3) 100%);
+  background:linear-gradient(155deg,var(--bg-soft) 0%,var(--bg-2) 45%,var(--bg-3) 100%);
   padding:var(--s6) var(--s5) var(--s5);box-shadow:var(--shadow-lg);
   animation:rise .5s var(--ease) both}
 .hero::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
-  background:linear-gradient(90deg,var(--green) 0 33.33%,var(--cyan) 33.33% 66.66%,var(--pink) 66.66% 100%)}
+  background:linear-gradient(90deg,var(--mint) 0 33.33%,var(--gold) 33.33% 66.66%,var(--blue) 66.66% 100%)}
 .hero::after{content:"";position:absolute;width:280px;height:280px;right:-90px;top:-120px;border-radius:50%;
-  background:radial-gradient(circle,rgba(0,255,135,.16),transparent 68%);pointer-events:none}
+  background:radial-gradient(circle,rgba(255,204,0,.16),transparent 68%);pointer-events:none}
 .hero .pitch{position:absolute;inset:0;width:100%;height:100%;opacity:.1;pointer-events:none}
 .hero-in{position:relative}
 .brand{display:flex;align-items:center;gap:var(--s2);margin-bottom:var(--s5)}
@@ -80,13 +90,13 @@ body::before{
 .kick .dtxt{min-width:0}
 .kick .d1{font-family:Archivo,system-ui,sans-serif;font-size:17px;font-weight:700;color:#fff;
   text-transform:uppercase;letter-spacing:.02em;line-height:1.15}
-.kick .d2{font-size:12px;color:var(--green);font-weight:600;margin-top:var(--s1);letter-spacing:.02em}
+.kick .d2{font-size:12px;color:var(--gold);font-weight:600;margin-top:var(--s1);letter-spacing:.02em}
 .hero-foot{display:flex;gap:var(--s2);margin-top:var(--s5);flex-wrap:wrap}
-.pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);
+.pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.14);
   border-radius:999px;padding:8px 14px;font-size:12px;color:#fff;text-decoration:none;font-weight:500;
   transition:background .18s var(--ease)}
-.pill:active{background:rgba(255,255,255,.22)}
-.pill.hot{background:var(--pink)}
+.pill:active{background:rgba(255,255,255,.24)}
+.pill.hot{background:var(--blue)}
 
 /* ---------- botões ---------- */
 button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
@@ -96,25 +106,31 @@ button{font:inherit;cursor:pointer;border:0;background:none;color:inherit}
   transition:transform .18s var(--ease),filter .18s var(--ease),opacity .18s var(--ease)}
 .btn:active{transform:scale(.975);filter:brightness(.95)}
 .btn:disabled{opacity:.32;cursor:default;transform:none}
-.btn-1{background:var(--green);color:var(--pl)}
-.btn-2{background:var(--pl);color:#fff}
-.btn-g{background:var(--soft);color:var(--pl)}
+.btn-1{background:var(--gold);color:var(--ink)}
+.btn-2{background:var(--bg);color:#fff}
+.btn-g{background:var(--soft);color:var(--bg)}
 .btn-s{width:auto;padding:10px var(--s4);font-size:11px;border-radius:var(--r-sm)}
 
 /* ---------- inputs ---------- */
 input{font:inherit;width:100%;background:var(--soft);border:1.5px solid transparent;color:var(--ink);
   border-radius:var(--r-md);padding:13px var(--s3);outline:none;
   transition:border-color .18s var(--ease),background .18s var(--ease)}
-input:focus{border-color:var(--pl);background:#fff}
+input:focus{border-color:var(--bg);background:#fff}
 input::placeholder{color:var(--faint)}
-label{display:block;color:var(--pl);margin-bottom:6px}
+label{display:block;color:var(--bg);margin-bottom:6px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
 .field+.field,.grid2+.field,.field+.grid2,.grid2+.grid2{margin-top:var(--s3)}
 .inline{display:flex;gap:var(--s2)}
 
+/* ---------- info somente leitura (não-organizador) ---------- */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.info-item{background:var(--soft);border-radius:var(--r-md);padding:11px var(--s3)}
+.info-item .k{color:var(--faint)}
+.info-item .v{font-size:14px;font-weight:600;margin-top:3px;letter-spacing:-.01em}
+
 /* ---------- sua vaga ---------- */
 .me-in{display:flex;align-items:center;gap:var(--s3)}
-.me-badge{width:48px;height:48px;border-radius:var(--r-md);background:var(--pl);color:var(--green);
+.me-badge{width:48px;height:48px;border-radius:var(--r-md);background:var(--bg);color:var(--gold);
   display:grid;place-items:center;flex:none;font-size:16px}
 .me-txt{flex:1;min-width:0}
 .me-txt b{display:block;font-size:15.5px;font-weight:600;letter-spacing:-.01em}
@@ -127,35 +143,35 @@ label{display:block;color:var(--pl);margin-bottom:6px}
   background:var(--soft);border-left:3px solid transparent;
   transition:background .18s var(--ease);animation:slide .35s var(--ease) both}
 .row+.row{margin-top:var(--s1)}
-.row.mine{border-left-color:var(--pink);background:rgba(233,0,82,.055)}
+.row.mine{border-left-color:var(--blue);background:rgba(0,87,184,.055)}
 .row.sub{opacity:.62}
 @keyframes slide{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
-.num{width:24px;height:24px;border-radius:7px;background:var(--soft-2);color:var(--pl);flex:none;
+.num{width:24px;height:24px;border-radius:7px;background:var(--soft-2);color:var(--bg);flex:none;
   display:grid;place-items:center;font-size:11.5px;font-family:Archivo,sans-serif;font-weight:700}
-.row.mine .num{background:var(--pink);color:#fff}
+.row.mine .num{background:var(--blue);color:#fff}
 .nm{flex:1;min-width:0;font-size:14.5px;font-weight:500;letter-spacing:-.01em;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nm i{font-style:normal;color:var(--pink);font-size:9px;font-weight:800;margin-left:7px;
+.nm i{font-style:normal;color:var(--blue);font-size:9px;font-weight:800;margin-left:7px;
   letter-spacing:.12em;font-family:Archivo,sans-serif;vertical-align:1px}
 .tag{font-family:Archivo,system-ui,sans-serif;font-size:9.5px;font-weight:700;padding:6px 9px;
   border-radius:6px;flex:none;text-transform:uppercase;letter-spacing:.09em;
   transition:transform .18s var(--ease)}
 .tag:active{transform:scale(.93)}
-.tag-ok{background:var(--green);color:var(--pl)}
+.tag-ok{background:var(--gold);color:var(--ink)}
 .tag-no{background:var(--soft-2);color:var(--dim)}
-.row.mine .tag-no{background:var(--pink);color:#fff}
+.row.mine .tag-no{background:var(--blue);color:#fff}
 .x{width:24px;height:24px;border-radius:6px;color:var(--faint);flex:none;font-size:13px;
   transition:color .18s var(--ease),background .18s var(--ease)}
-.x:active{background:rgba(233,0,82,.14);color:var(--pink)}
+.x:active{background:rgba(0,87,184,.14);color:var(--blue)}
 .empty{text-align:center;color:var(--faint);font-size:13.5px;padding:var(--s6) 0;line-height:1.6}
 
 /* ---------- pagamentos ---------- */
 .bar{height:8px;border-radius:999px;background:var(--soft-2);overflow:hidden}
 .bar>i{display:block;height:100%;border-radius:999px;
-  background:linear-gradient(90deg,var(--green-deep),var(--green));
+  background:linear-gradient(90deg,var(--gold-deep),var(--gold));
   transition:width .7s var(--ease)}
 .money{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:var(--s3);gap:var(--s3)}
-.money .big{font-size:36px;color:var(--pl)}
+.money .big{font-size:36px;color:var(--bg)}
 .money .cap{font-size:12.5px;color:var(--dim);margin-top:3px}
 .money .side{font-size:12.5px;color:var(--dim);text-align:right;line-height:1.35}
 .money .side b{display:block;font-size:16px;color:var(--ink);font-weight:600}
@@ -169,44 +185,67 @@ label{display:block;color:var(--pl);margin-bottom:6px}
 .teams{display:grid;gap:var(--s3)}
 @media(min-width:520px){.teams{grid-template-columns:repeat(3,1fr)}}
 .team{border-radius:var(--r-md);padding:var(--s4);background:var(--soft);
-  border-top:4px solid var(--kit,var(--pl));animation:pop .45s var(--ease) both}
+  border-top:4px solid var(--kit,var(--bg));animation:pop .45s var(--ease) both}
 .team:nth-child(2){animation-delay:.07s}
 .team:nth-child(3){animation-delay:.14s}
 .team-h{display:flex;align-items:center;gap:var(--s2);padding-bottom:10px;margin-bottom:10px;
   border-bottom:1px solid var(--line)}
 .shirt{width:20px;height:20px;flex:none}
 .team-h b{font-family:Archivo,system-ui,sans-serif;font-size:11px;font-weight:800;
-  letter-spacing:.11em;text-transform:uppercase;color:var(--pl)}
+  letter-spacing:.11em;text-transform:uppercase;color:var(--bg)}
 .team p{font-size:13.5px;padding:5px 0;font-weight:500;letter-spacing:-.01em}
-.team p+p{border-top:1px solid rgba(26,0,31,.06)}
+.team p+p{border-top:1px solid rgba(10,38,23,.06)}
 @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
 .rolling .team{animation:none}
 
 /* ---------- organização ---------- */
 details.org summary{list-style:none;cursor:pointer;display:flex;align-items:center;
-  justify-content:space-between;color:var(--pl)}
+  justify-content:space-between;color:var(--bg)}
 details.org summary::-webkit-details-marker{display:none}
 details.org[open] summary{margin-bottom:var(--s4)}
 details.org summary::after{content:"\25BE";transition:transform .25s var(--ease);font-size:11px}
 details.org[open] summary::after{transform:rotate(180deg)}
 
-.note code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
-  background:var(--soft-2);padding:2px 6px;border-radius:5px}
-.note{font-size:13px;color:var(--ink);background:var(--card);border-left:4px solid var(--pink);
+.note{font-size:13px;color:var(--ink);background:var(--card);border-left:4px solid var(--blue);
   border-radius:var(--r-md);padding:13px var(--s4);line-height:1.5;box-shadow:var(--shadow);
   animation:rise .5s var(--ease) both}
-.foot{text-align:center;font-size:10.5px;color:rgba(255,255,255,.62);padding:var(--s1) 0 var(--s2);
-  text-transform:uppercase;letter-spacing:.13em;font-weight:600}
+.note code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+  background:var(--soft-2);padding:2px 6px;border-radius:5px}
+.foot{text-align:center;padding:var(--s2) 0 var(--s2);display:flex;flex-direction:column;
+  align-items:center;gap:6px}
+.foot .status{font-size:10.5px;color:rgba(255,255,255,.62);text-transform:uppercase;
+  letter-spacing:.13em;font-weight:600}
+.foot .gestor{font-size:11.5px;color:rgba(255,255,255,.38);text-decoration:underline;
+  text-underline-offset:3px;font-weight:500}
+.foot .gestor:active{color:rgba(255,255,255,.7)}
 .live{display:inline-flex;align-items:center;gap:7px}
-.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--green);
+.live::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--gold);
   animation:blink 2s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--pl);
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--bg);
   color:#fff;font-family:Archivo,system-ui,sans-serif;font-size:11.5px;font-weight:700;
   letter-spacing:.09em;text-transform:uppercase;padding:13px 22px;border-radius:999px;z-index:9;
-  animation:up .3s var(--ease) both;box-shadow:var(--shadow-lg)}
+  animation:up .3s var(--ease) both;box-shadow:var(--shadow-lg);max-width:88vw;text-align:center}
 @keyframes up{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
 .boot{display:grid;place-items:center;min-height:70dvh;color:rgba(255,255,255,.55);font-size:13px}
+
+/* ---------- modal do organizador ---------- */
+.overlay{position:fixed;inset:0;background:rgba(5,20,12,.55);backdrop-filter:blur(2px);
+  display:flex;align-items:flex-end;justify-content:center;z-index:20;padding:0;
+  animation:fade .2s var(--ease) both}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@media(min-width:480px){.overlay{align-items:center;padding:var(--s4)}}
+.modal{background:var(--card);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:var(--s5);
+  width:100%;max-width:400px;box-shadow:var(--shadow-lg);animation:sheet .28s var(--ease) both}
+@media(min-width:480px){.modal{border-radius:var(--r-lg)}}
+@keyframes sheet{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+.modal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s4)}
+.modal-h b{font-family:Archivo,system-ui,sans-serif;font-size:15px;font-weight:800;color:var(--bg);
+  text-transform:uppercase;letter-spacing:.04em}
+.modal-close{width:30px;height:30px;border-radius:8px;color:var(--faint);font-size:16px;flex:none}
+.modal-close:active{background:var(--soft)}
+.modal-err{font-size:12.5px;color:var(--blue);font-weight:600;margin-top:var(--s2)}
+.modal-hint{font-size:12px;color:var(--faint);margin-top:var(--s3);line-height:1.5}
 
 /* telemóveis estreitos: aperta as margens para o nome não ser cortado */
 @media (max-width:400px){
@@ -235,9 +274,7 @@ const html = htm.bind(h);
 /* ============================================================
    CONFIGURAÇÃO
    Muda aqui os dados do grupo. Os dois primeiros valores ligam
-   o app ao Supabase (Project Settings > API). Enquanto
-   estiverem em branco, o app guarda tudo só neste celular —
-   funciona, mas não é compartilhado.
+   o app ao Supabase (Project Settings > API).
    ============================================================ */
 const SUPABASE_URL = "https://fvdlajeblaqifjtyezvn.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_Qmj4oO4GqM_nA6OxjFqnOA_C67pKCZ0";
@@ -249,6 +286,7 @@ const CAMPO = "Ver o campo no mapa";
 
 const DEFAULTS = { kickoff: "10:00", slots: 15, price: 5 };
 const ME_KEY = "fdr:me";
+const ORG_KEY = "fdr:orgkey";
 const LOCAL_KEY = "fdr:local";
 
 const configured = SUPABASE_URL !== "COLOCAR_AQUI" && SUPABASE_ANON_KEY !== "COLOCAR_AQUI";
@@ -257,9 +295,9 @@ const configured = SUPABASE_URL !== "COLOCAR_AQUI" && SUPABASE_ANON_KEY !== "COL
 // a camisa branca precisa ser branca, mas uma barra branca em cima de
 // cartão claro não aparece.
 const KITS = [
-  { name: "Coletes", color: "#E90052", edge: "#E90052" },
-  { name: "Brancos", color: "#FFFFFF", edge: "#04F5FF" },
-  { name: "Pretos", color: "#37003C", edge: "#37003C" },
+  { name: "Coletes", color: "#0057B8", edge: "#0057B8" },
+  { name: "Brancos", color: "#FFFFFF", edge: "#00C853" },
+  { name: "Pretos", color: "#0A2617", edge: "#0A2617" },
 ];
 
 /* ---------------- datas ---------------- */
@@ -294,6 +332,7 @@ function countdown(d) {
 }
 
 const eur = (n) => `${Number(n || 0).toFixed(2).replace(".", ",").replace(",00", "")}€`;
+const uuid = () => crypto.randomUUID();
 
 function shuffle(arr) {
   const a = [...arr];
@@ -311,8 +350,15 @@ function initials(name) {
 
 /* ============================================================
    CAMADA DE DADOS
-   Duas implementações com a mesma interface. O app não sabe
-   qual está usando — muda só a linha do "store" no final.
+   Duas implementações com a mesma interface. Sem contas, sem
+   email — o "login" do organizador é só um código secreto que o
+   servidor confere a cada ação (função is_admin no Postgres).
+   Errar o código nunca trava a lista dos jogadores comuns.
+
+   store.live          : true só no Supabase
+   store.verifyCode()  : confere o código, sem mudar nada
+   store.adminXxx(...) : ações de organizador — sempre recebem
+                         o código como último parâmetro
    ============================================================ */
 function localStore() {
   const read = () => {
@@ -329,13 +375,6 @@ function localStore() {
       write({ ...s, game, players: s.game ? [] : s.players || [] });
       return game;
     },
-    async saveGame(date, patch) {
-      const s = read();
-      const game = { ...(s.game || {}), ...patch, game_date: patch.game_date || date };
-      if (patch.game_date && patch.game_date !== date) s.players = [];
-      write({ ...s, game });
-      return game;
-    },
     async players() {
       return read().players || [];
     },
@@ -346,17 +385,41 @@ function localStore() {
       write(s);
       return row;
     },
-    async setPaid(id, paid) {
-      const s = read();
-      s.players = (s.players || []).map((p) => (p.id === id ? { ...p, paid } : p));
-      write(s);
-    },
     async removePlayer(id) {
       const s = read();
       s.players = (s.players || []).filter((p) => p.id !== id);
       write(s);
+      return true;
     },
     subscribe() { return () => {}; },
+    // No modo local (sem Supabase) é um telemóvel só: quem abre já
+    // controla tudo, não existe conceito de organizador.
+    async verifyCode() { return true; },
+    async adminSetPaid(id, paid) {
+      const s = read();
+      s.players = (s.players || []).map((p) => (p.id === id ? { ...p, paid } : p));
+      write(s);
+      return true;
+    },
+    async adminRemovePlayer(id) { return this.removePlayer(id); },
+    async adminOpenGame(patch) {
+      const s = read();
+      const game = { ...DEFAULTS, ...patch, game_date: patch.game_date || nextSunday(), teams: null };
+      write({ ...s, game, players: [] });
+      return game;
+    },
+    async adminUpdateGame(date, patch) {
+      const s = read();
+      const game = { ...(s.game || {}), ...patch, teams: null };
+      write({ ...s, game });
+      return game;
+    },
+    async adminSetTeams(date, teams) {
+      const s = read();
+      const game = { ...(s.game || {}), teams };
+      write({ ...s, game });
+      return game;
+    },
   };
 }
 
@@ -367,33 +430,17 @@ async function remoteStore() {
   const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // Verifica que as tabelas existem antes de assumir o Supabase. Sem isto,
-  // com o schema.sql por correr, o app parecia funcionar mas não gravava
-  // nada: cada gesto dava erro em silêncio e a lista desaparecia ao recarregar.
+  // com o schema.sql por rodar, o app parecia funcionar mas não gravava
+  // nada: cada gesto dava erro em silêncio e a lista sumia ao recarregar.
   const { error: semTabelas } = await sb.from("games").select("game_date").limit(1);
-  if (semTabelas) throw new Error(`Supabase sem as tabelas (${semTabelas.message}). Corre o supabase/schema.sql.`);
+  if (semTabelas) throw new Error(`Supabase sem as tabelas (${semTabelas.message}). Roda o supabase/schema.sql.`);
 
   return {
     live: true,
     async currentGame() {
       const { data } = await sb.from("games").select("*").gte("game_date", today())
         .order("game_date", { ascending: true }).limit(1);
-      if (data && data.length) return data[0];
-      const novo = { game_date: nextSunday(), ...DEFAULTS, teams: null };
-      const { data: ins } = await sb.from("games").upsert(novo).select().single();
-      return ins || novo;
-    },
-    async saveGame(date, patch) {
-      if (patch.game_date && patch.game_date !== date) {
-        const { data: existente } = await sb.from("games").select("*").eq("game_date", patch.game_date).maybeSingle();
-        if (existente) return existente;
-        const { data } = await sb.from("games")
-          .upsert({ game_date: patch.game_date, kickoff: patch.kickoff, slots: patch.slots, price: patch.price, teams: null })
-          .select().single();
-        return data;
-      }
-      const { data } = await sb.from("games").update({ ...patch, updated_at: new Date().toISOString() })
-        .eq("game_date", date).select().single();
-      return data;
+      return data && data.length ? data[0] : null;
     },
     async players(date) {
       const { data, error } = await sb.from("players").select("*").eq("game_date", date)
@@ -401,18 +448,18 @@ async function remoteStore() {
       if (error) { console.error(error); return []; }
       return data.map((r) => ({ id: r.id, name: r.name, paid: r.paid }));
     },
-    async addPlayer(date, name) {
-      const { data, error } = await sb.from("players").insert({ game_date: date, name, paid: false }).select().single();
+    // Sem código: entra pela função join_game, que dá um token —
+    // é esse token que depois prova, sem senha nenhuma, que o próprio
+    // celular pode tirar essa vaga de volta.
+    async addPlayer(date, name, token) {
+      const { data, error } = await sb.rpc("join_game", { p_date: date, p_name: name, p_token: token });
       if (error) { console.error(error); return null; }
-      return { id: data.id, name: data.name, paid: data.paid };
+      return { id: data, name, paid: false };
     },
-    async setPaid(id, paid) {
-      const { error } = await sb.from("players").update({ paid }).eq("id", id);
-      if (error) console.error(error);
-    },
-    async removePlayer(id) {
-      const { error } = await sb.from("players").delete().eq("id", id);
-      if (error) console.error(error);
+    async removePlayer(id, token) {
+      const { data, error } = await sb.rpc("leave_game", { p_id: id, p_token: token });
+      if (error) { console.error(error); return false; }
+      return !!data;
     },
     subscribe(date, onChange) {
       const ch = sb.channel(`fdr-${date}`)
@@ -420,6 +467,44 @@ async function remoteStore() {
         .on("postgres_changes", { event: "*", schema: "public", table: "games" }, onChange)
         .subscribe();
       return () => sb.removeChannel(ch);
+    },
+    // Confere o código no servidor sem mudar nada — usado só na hora
+    // de entrar no modo organizador.
+    async verifyCode(code) {
+      const { data, error } = await sb.rpc("is_admin", { p_secret: code });
+      if (error) { console.error(error); return false; }
+      return !!data;
+    },
+    async adminSetPaid(id, paid, code) {
+      const { data, error } = await sb.rpc("admin_set_paid", { p_id: id, p_paid: paid, p_secret: code });
+      if (error) { console.error(error); return false; }
+      return !!data;
+    },
+    async adminRemovePlayer(id, code) {
+      const { data, error } = await sb.rpc("admin_remove_player", { p_id: id, p_secret: code });
+      if (error) { console.error(error); return false; }
+      return !!data;
+    },
+    async adminOpenGame(patch, code) {
+      const { data, error } = await sb.rpc("admin_open_game", {
+        p_date: patch.game_date || nextSunday(), p_kickoff: patch.kickoff || DEFAULTS.kickoff,
+        p_slots: patch.slots || DEFAULTS.slots, p_price: patch.price ?? DEFAULTS.price, p_secret: code,
+      });
+      if (error) { console.error(error); return null; }
+      return data;
+    },
+    async adminUpdateGame(date, patch, code) {
+      const { data, error } = await sb.rpc("admin_update_game", {
+        p_date: date, p_kickoff: patch.kickoff ?? null, p_slots: patch.slots ?? null,
+        p_price: patch.price ?? null, p_secret: code,
+      });
+      if (error) { console.error(error); return null; }
+      return data;
+    },
+    async adminSetTeams(date, teams, code) {
+      const { data, error } = await sb.rpc("admin_set_teams", { p_date: date, p_teams: teams, p_secret: code });
+      if (error) { console.error(error); return null; }
+      return data;
     },
   };
 }
@@ -441,15 +526,15 @@ const Pitch = () => html`
 
 const Crest = () => html`
   <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true">
-    <path d="M16 2 29 6v10c0 8-6.5 13-13 14C9.5 29 3 24 3 16V6z" fill="none" stroke="#00FF87" stroke-width="2.2" />
-    <circle cx="16" cy="15" r="5.5" fill="none" stroke="#00FF87" stroke-width="1.9" />
-    <path d="M16 9.5v11M10.5 15h11" stroke="#00FF87" stroke-width="1.9" />
+    <path d="M16 2 29 6v10c0 8-6.5 13-13 14C9.5 29 3 24 3 16V6z" fill="none" stroke="#FFCC00" stroke-width="2.2" />
+    <circle cx="16" cy="15" r="5.5" fill="none" stroke="#FFCC00" stroke-width="1.9" />
+    <path d="M16 9.5v11M10.5 15h11" stroke="#FFCC00" stroke-width="1.9" />
   </svg>`;
 
 const Shirt = ({ color }) => html`
   <svg class="shirt" viewBox="0 0 24 24" aria-hidden="true">
     <path d="M8.5 2 4 4.5 2.5 9l3 1.2V22h13V10.2l3-1.2L20 4.5 15.5 2a3.7 3.7 0 0 1-7 0z"
-      fill=${color} stroke="rgba(26,0,31,.4)" stroke-width=".9" />
+      fill=${color} stroke="rgba(10,38,23,.4)" stroke-width=".9" />
   </svg>`;
 
 function CopyRow({ k, v, onCopy }) {
@@ -463,19 +548,50 @@ function CopyRow({ k, v, onCopy }) {
     </div>`;
 }
 
+function LoginModal({ onClose, onSubmit, err, busy }) {
+  const [code, setCode] = useState("");
+  return html`
+    <div class="overlay" onClick=${(e) => e.target === e.currentTarget && onClose()}>
+      <div class="modal">
+        <div class="modal-h">
+          <b>Área do organizador</b>
+          <button class="modal-close" onClick=${onClose} aria-label="Fechar">✕</button>
+        </div>
+        <div class="field">
+          <label class="lbl">Código do organizador</label>
+          <input type="password" autocomplete="off" value=${code}
+            onInput=${(e) => setCode(e.target.value)}
+            onKeyDown=${(e) => e.key === "Enter" && onSubmit(code)} />
+        </div>
+        ${err && html`<div class="modal-err">${err}</div>`}
+        <button class="btn btn-2" style="margin-top:16px" disabled=${!code.trim() || busy}
+          onClick=${() => onSubmit(code)}>
+          ${busy ? "Conferindo…" : "Entrar"}
+        </button>
+        <div class="modal-hint">Só quem organiza a pelada tem esse código. Jogador não precisa disso — é só entrar na lista aí embaixo.</div>
+      </div>
+    </div>`;
+}
+
 /* ============================================================
    APP
    ============================================================ */
 function App({ store }) {
-  const [game, setGame] = useState(null);
+  const [game, setGame] = useState(undefined); // undefined = carregando, null = sem jogo aberto
   const [players, setPlayers] = useState([]);
   const [me, setMe] = useState(() => { try { return JSON.parse(localStorage.getItem(ME_KEY)); } catch { return null; } });
+  const [orgKey, setOrgKey] = useState("");
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginErr, setLoginErr] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
   const [nome, setNome] = useState("");
   const [outro, setOutro] = useState("");
   const [rolling, setRolling] = useState(false);
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const timer = useRef(null);
+
+  const isOrganizer = store.live ? !!orgKey : true;
 
   const say = useCallback((m) => {
     setToast(m);
@@ -494,9 +610,28 @@ function App({ store }) {
       const g = await store.currentGame();
       if (!alive) return;
       setGame(g);
-      const rows = await store.players(g.game_date);
-      if (alive) setPlayers(rows);
+      if (g) {
+        const rows = await store.players(g.game_date);
+        if (alive) setPlayers(rows);
+      }
     })();
+    return () => { alive = false; };
+  }, [store]);
+
+  // Um código guardado de uma sessão anterior só vale depois de o
+  // servidor confirmar de novo — assim, se o código for trocado ou
+  // revogado, o app simplesmente volta a tratar este celular como
+  // um jogador comum, sem ficar tentando e falhando.
+  useEffect(() => {
+    if (!store.live) return;
+    const saved = localStorage.getItem(ORG_KEY);
+    if (!saved) return;
+    let alive = true;
+    store.verifyCode(saved).then((ok) => {
+      if (!alive) return;
+      if (ok) setOrgKey(saved);
+      else localStorage.removeItem(ORG_KEY);
+    });
     return () => { alive = false; };
   }, [store]);
 
@@ -505,13 +640,60 @@ function App({ store }) {
     const off = store.subscribe(game.game_date, async () => {
       const g = await store.currentGame();
       setGame(g);
-      const rows = await store.players(g.game_date);
-      setPlayers(rows);
+      if (g) {
+        const rows = await store.players(g.game_date);
+        setPlayers(rows);
+      }
     });
     return off;
   }, [store, game && game.game_date]);
 
-  if (!game) return html`<div class="boot">Carregando a pelada…</div>`;
+  async function fazerLogin(code) {
+    setLoginBusy(true);
+    setLoginErr("");
+    const ok = await store.verifyCode(code);
+    setLoginBusy(false);
+    if (!ok) return setLoginErr("Código incorreto");
+    localStorage.setItem(ORG_KEY, code);
+    setOrgKey(code);
+    setLoginOpen(false);
+    say("Modo organizador ativado");
+  }
+
+  function sairOrganizador() {
+    localStorage.removeItem(ORG_KEY);
+    setOrgKey("");
+    say("Saiu do modo organizador");
+  }
+
+  if (game === undefined) return html`<div class="boot">Carregando a pelada…</div>`;
+
+  // Ninguém abriu o jogo ainda. Só o organizador consegue criar um.
+  if (game === null) {
+    return html`
+      <div class="wrap">
+        ${isOrganizer && store.live && html`
+          <div class="ob"><b>Modo organizador ativo</b><button onClick=${sairOrganizador}>Sair</button></div>`}
+        <div class="card" style="text-align:center;padding:36px 20px">
+          <div class="card-t lbl" style="margin-bottom:10px">Sem jogo marcado</div>
+          <div class="empty" style="padding:0 0 20px">
+            ${isOrganizer
+              ? "Abra a pelada de domingo que vem pra liberar a lista."
+              : "Ainda não tem pelada marcada. Peça pro organizador abrir a próxima."}
+          </div>
+          ${isOrganizer && html`
+            <button class="btn btn-1" onClick=${async () => {
+              const g = await store.adminOpenGame({}, orgKey);
+              if (g) { setGame(g); say("Jogo aberto"); } else say("Não deu pra abrir o jogo");
+            }}>Abrir domingo, ${weekday(nextSunday())} que vem</button>`}
+        </div>
+        ${!isOrganizer && store.live && html`
+          <button class="foot gestor" onClick=${() => setLoginOpen(true)}>Área do organizador</button>`}
+      </div>
+      ${loginOpen && h(LoginModal, { onClose: () => { setLoginOpen(false); setLoginErr(""); }, onSubmit: fazerLogin, err: loginErr, busy: loginBusy })}
+      ${toast && html`<div class="toast">${toast}</div>`}
+    `;
+  }
 
   const slots = game.slots || DEFAULTS.slots;
   const price = Number(game.price ?? DEFAULTS.price);
@@ -524,27 +706,19 @@ function App({ store }) {
   const souReserva = myIdx >= slots;
   const lotado = titulares.length >= slots;
 
-  async function patch(p) {
-    const g = await store.saveGame(game.game_date, p);
-    if (g) {
-      setGame(g);
-      if (p.game_date && p.game_date !== game.game_date) refresh(g.game_date);
-    }
-  }
-
   async function entrar() {
     const n = nome.trim();
     if (!n || busy) return;
     setBusy(true);
-    const row = await store.addPlayer(game.game_date, n);
+    const tok = uuid();
+    const row = await store.addPlayer(game.game_date, n, tok);
     setBusy(false);
-    if (!row) return say("Não deu para entrar");
-    const novo = { id: row.id, name: row.name };
+    if (!row) return say("Não deu pra entrar");
+    const novo = { id: row.id, name: row.name, token: tok };
     localStorage.setItem(ME_KEY, JSON.stringify(novo));
     setMe(novo);
     setNome("");
     setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
-    await patch({ teams: null });
     say(players.length >= slots ? "Você ficou de reserva" : "Você está dentro");
   }
 
@@ -552,31 +726,37 @@ function App({ store }) {
     const n = outro.trim();
     if (!n || busy) return;
     setBusy(true);
-    const row = await store.addPlayer(game.game_date, n);
+    const row = await store.addPlayer(game.game_date, n, uuid());
     setBusy(false);
-    if (!row) return;
+    if (!row) return say("Não deu pra adicionar");
     setOutro("");
     setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
-    await patch({ teams: null });
     say(`${row.name} na lista`);
   }
 
   async function togglePago(p) {
+    if (!isOrganizer) return;
     const novo = !p.paid;
     setPlayers((l) => l.map((x) => (x.id === p.id ? { ...x, paid: novo } : x)));
-    await store.setPaid(p.id, novo);
+    const ok = await store.adminSetPaid(p.id, novo, orgKey);
+    if (!ok) { setPlayers((l) => l.map((x) => (x.id === p.id ? { ...x, paid: !novo } : x))); say("Não deu pra salvar"); }
   }
 
   async function sair(p) {
+    const souEu = me && me.id === p.id;
+    if (!isOrganizer && !souEu) return;
     if (!confirm(`Tirar ${p.name} da lista?`)) return;
+    const ok = isOrganizer
+      ? await store.adminRemovePlayer(p.id, orgKey)
+      : await store.removePlayer(p.id, me.token);
+    if (!ok) return say("Não consegui remover");
     setPlayers((l) => l.filter((x) => x.id !== p.id));
-    await store.removePlayer(p.id);
-    if (me && me.id === p.id) { localStorage.removeItem(ME_KEY); setMe(null); }
-    await patch({ teams: null });
+    if (souEu) { localStorage.removeItem(ME_KEY); setMe(null); }
+    if (isOrganizer) await store.adminSetTeams(game.game_date, null, orgKey).then((g) => g && setGame(g));
   }
 
   function sortear() {
-    if (titulares.length < 3 || rolling) return;
+    if (!isOrganizer || titulares.length < 3 || rolling) return;
     setRolling(true);
     let t = 0;
     const iv = setInterval(async () => {
@@ -587,11 +767,23 @@ function App({ store }) {
       if (t >= 11) {
         clearInterval(iv);
         setRolling(false);
-        await patch({ teams: prev });
+        const g = await store.adminSetTeams(game.game_date, prev, orgKey);
+        if (g) setGame(g); else say("Não deu pra salvar o sorteio");
       } else {
         setGame((g) => ({ ...g, teams: prev }));
       }
     }, 85);
+  }
+
+  async function salvarOrganizacao(patch) {
+    const g = await store.adminUpdateGame(game.game_date, patch, orgKey);
+    if (g) setGame(g); else say("Não deu pra salvar");
+  }
+
+  async function abrirProximoDomingo() {
+    if (!confirm("Abrir o jogo do próximo domingo? A lista dele começa vazia.")) return;
+    const g = await store.adminOpenGame({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price }, orgKey);
+    if (g) { setGame(g); refresh(g.game_date); say("Próximo domingo aberto"); } else say("Não deu pra abrir");
   }
 
   async function copiar(txt, o) {
@@ -630,25 +822,31 @@ function App({ store }) {
     return L.join("\n");
   }
 
-  const Linha = (p, i, sub) => html`
-    <div class=${`row${me && me.id === p.id ? " mine" : ""}${sub ? " sub" : ""}`} key=${p.id}>
+  const Linha = (p, i, sub) => {
+    const souEu = me && me.id === p.id;
+    const podeRemover = isOrganizer || souEu;
+    return html`
+    <div class=${`row${souEu ? " mine" : ""}${sub ? " sub" : ""}`} key=${p.id}>
       <span class="num">${i + 1}</span>
-      <span class="nm">${p.name}${me && me.id === p.id ? html`<i>VOCÊ</i>` : null}</span>
-      <button class=${`tag ${p.paid ? "tag-ok" : "tag-no"}`} onClick=${() => togglePago(p)}>
-        ${p.paid ? "Pago" : "Pendente"}
-      </button>
-      <button class="x" onClick=${() => sair(p)} aria-label="Tirar da lista">✕</button>
+      <span class="nm">${p.name}${souEu ? html`<i>VOCÊ</i>` : null}</span>
+      ${isOrganizer
+        ? html`<button class=${`tag ${p.paid ? "tag-ok" : "tag-no"}`} onClick=${() => togglePago(p)}>
+            ${p.paid ? "Pago" : "Pendente"}
+          </button>`
+        : html`<span class=${`tag ${p.paid ? "tag-ok" : "tag-no"}`}>${p.paid ? "Pago" : "Pendente"}</span>`}
+      ${podeRemover && html`<button class="x" onClick=${() => sair(p)} aria-label="Tirar da lista">✕</button>`}
     </div>`;
+  };
 
   return html`
     <div class="wrap">
 
+      ${isOrganizer && store.live && html`
+        <div class="ob"><b>Modo organizador ativo</b><button onClick=${sairOrganizador}>Sair</button></div>`}
+
       ${!store.live && html`<div class="note">
-        ${configured
-          ? html`<b>Falta rodar o SQL.</b> O Supabase está ligado, mas as tabelas ainda não existem,
-              então a lista está salva só neste celular. Abre o SQL Editor do Supabase e roda o arquivo <code>supabase/schema.sql</code>.`
-          : html`A lista está salva só neste celular. Para todo mundo ver a mesma, liga o Supabase
-              (instruções no README).`}
+        A lista está salva só neste celular. Para todo mundo ver a mesma, liga o Supabase
+        (instruções no README).
       </div>`}
 
       <div class="hero">
@@ -680,9 +878,6 @@ function App({ store }) {
                 <b>${myRow.name}</b>
                 <span>${souReserva ? `Reserva · ${myIdx - slots + 1}º da fila` : `Confirmado · ${myIdx + 1}º`} · ${myRow.paid ? "pago" : `faltam ${eur(price)}`}</span>
               </div>
-              <button class=${`btn btn-s ${myRow.paid ? "btn-g" : "btn-1"}`} onClick=${() => togglePago(myRow)}>
-                ${myRow.paid ? "Pago" : "Já paguei"}
-              </button>
             </div>`
           : html`<div>
               <div class="card-t lbl" style="margin-bottom:10px">Sua vaga</div>
@@ -743,9 +938,10 @@ function App({ store }) {
       <div class="card">
         <div class="card-h">
           <span class="card-t lbl">Times</span>
-          <button class="btn btn-1 btn-s" disabled=${titulares.length < 3 || rolling} onClick=${sortear}>
-            ${rolling ? "Sorteando…" : game.teams ? "Sortear de novo" : "Sortear"}
-          </button>
+          ${isOrganizer && html`
+            <button class="btn btn-1 btn-s" disabled=${titulares.length < 3 || rolling} onClick=${sortear}>
+              ${rolling ? "Sorteando…" : game.teams ? "Sortear de novo" : "Sortear"}
+            </button>`}
         </div>
 
         ${titulares.length < 3
@@ -758,49 +954,55 @@ function App({ store }) {
                     ${t.length ? t.map((n, j) => html`<p key=${j}>${n}</p>`) : html`<p style="opacity:.5">—</p>`}
                   </div>`)}
               </div>`
-            : html`<div class="empty">Sem sorteio ainda.<br />${titulares.length} jogadores prontos.</div>`}
+            : html`<div class="empty">${isOrganizer ? "Sem sorteio ainda." : "O organizador ainda não sorteou os times."}<br />${titulares.length} jogadores prontos.</div>`}
       </div>
 
-      <details class="card org">
-        <summary class="lbl">Organização</summary>
-        <div class="grid2">
-          <div class="field">
-            <label class="lbl">Data</label>
-            <input type="date" value=${game.game_date} onChange=${(e) => patch({ game_date: e.target.value, kickoff: game.kickoff, slots, price })} />
-          </div>
-          <div class="field">
-            <label class="lbl">Hora</label>
-            <input type="time" value=${game.kickoff} onChange=${(e) => patch({ kickoff: e.target.value })} />
-          </div>
-        </div>
-        <div class="grid2">
-          <div class="field">
-            <label class="lbl">Vagas</label>
-            <input type="number" min="3" value=${slots} onChange=${(e) => patch({ slots: Math.max(3, parseInt(e.target.value) || 3), teams: null })} />
-          </div>
-          <div class="field">
-            <label class="lbl">Valor por jogador</label>
-            <input type="number" min="0" step="0.5" value=${price} onChange=${(e) => patch({ price: Math.max(0, parseFloat(e.target.value) || 0) })} />
-          </div>
-        </div>
-        <button class="btn btn-g" style="margin-top:16px"
-          onClick=${() => confirm("Abrir o jogo do próximo domingo? A lista dele começa vazia.")
-            && patch({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price })}>
-          Abrir o próximo domingo
-        </button>
-        ${me && html`<button class="btn btn-g" style="margin-top:8px"
-          onClick=${() => { localStorage.removeItem(ME_KEY); setMe(null); say("Beleza, esqueci quem você é"); }}>
-          Não sou mais o ${me.name}
-        </button>`}
-      </details>
+      ${isOrganizer
+        ? html`<details class="card editable org">
+            <summary class="lbl">Organização</summary>
+            <div class="grid2">
+              <div class="field">
+                <label class="lbl">Hora</label>
+                <input type="time" value=${game.kickoff} onChange=${(e) => salvarOrganizacao({ kickoff: e.target.value })} />
+              </div>
+              <div class="field">
+                <label class="lbl">Vagas</label>
+                <input type="number" min="3" value=${slots} onChange=${(e) => salvarOrganizacao({ slots: Math.max(3, parseInt(e.target.value) || 3) })} />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">Valor por jogador</label>
+              <input type="number" min="0" step="0.5" value=${price} onChange=${(e) => salvarOrganizacao({ price: Math.max(0, parseFloat(e.target.value) || 0) })} />
+            </div>
+            <button class="btn btn-g" style="margin-top:16px" onClick=${abrirProximoDomingo}>
+              Abrir o próximo domingo
+            </button>
+          </details>`
+        : html`<div class="card">
+            <div class="card-t lbl" style="margin-bottom:12px">Organização</div>
+            <div class="info-grid">
+              <div class="info-item"><div class="k lbl">Hora</div><div class="v">${game.kickoff}</div></div>
+              <div class="info-item"><div class="k lbl">Vagas</div><div class="v">${slots}</div></div>
+              <div class="info-item"><div class="k lbl">Valor</div><div class="v">${eur(price)}</div></div>
+              <div class="info-item"><div class="k lbl">Status</div><div class="v">${lotado ? "Lotado" : "Aberto"}</div></div>
+            </div>
+          </div>`}
+
+      ${me && html`<button class="btn btn-g" onClick=${() => { localStorage.removeItem(ME_KEY); setMe(null); say("Beleza, esqueci quem você é"); }}>
+        Não sou mais o ${me.name}
+      </button>`}
 
       <div class="foot">
-        ${store.live
-          ? html`<span class="live">Lista compartilhada, atualiza sozinha</span>`
-          : "Salvo só neste celular"}
+        <span class="status">
+          ${store.live
+            ? html`<span class="live">Lista compartilhada, atualiza sozinha</span>`
+            : "Salvo só neste celular"}
+        </span>
+        ${!isOrganizer && store.live && html`<button class="gestor" onClick=${() => setLoginOpen(true)}>Área do organizador</button>`}
       </div>
     </div>
 
+    ${loginOpen && h(LoginModal, { onClose: () => { setLoginOpen(false); setLoginErr(""); }, onSubmit: fazerLogin, err: loginErr, busy: loginBusy })}
     ${toast && html`<div class="toast">${toast}</div>`}
   `;
 }
