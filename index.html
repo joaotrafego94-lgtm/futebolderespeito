@@ -725,7 +725,7 @@ function App({ store }) {
       try {
         const resp = await fetch(`${EDGE_BASE}/stripe-verify-session`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
           body: JSON.stringify({ session_id: sessionId }),
         });
         const data = await resp.json();
@@ -864,16 +864,16 @@ function App({ store }) {
     try {
       const resp = await fetch(`${EDGE_BASE}/stripe-create-session`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
         body: JSON.stringify({ player_id: row.id }),
       });
       const data = await resp.json();
-      if (!resp.ok || !data.url) { setStripeBusy(false); return say(data.error || "Não deu pra abrir o Stripe"); }
+      if (!resp.ok || !data.url) { setStripeBusy(false); return say(data.error || "Não deu pra abrir o pagamento"); }
       location.href = data.url;
     } catch (e) {
       console.error(e);
       setStripeBusy(false);
-      say("Não deu pra abrir o Stripe");
+      say("Não deu pra abrir o pagamento");
     }
   }
 
@@ -1069,13 +1069,13 @@ function App({ store }) {
                 <div class="card-t lbl" style="margin-bottom:4px">Pagamento de ${nome.trim()}</div>
                 <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
                   ${store.live
-                    ? `${eur(price)} pra garantir a vaga. Ao clicar você vai pro Stripe pagar — a vaga vira real assim que o pagamento for aprovado, sem precisar avisar ninguém.`
+                    ? `${eur(price)} pra garantir a vaga. Ao clicar você vai pagar — a vaga vira real assim que o pagamento for aprovado, sem precisar avisar ninguém.`
                     : `${eur(price)} pra garantir a vaga. Sem o Supabase ligado, quem organiza confirma manualmente.`}
                 </div>
                 <div class="inline">
                   <button class="btn btn-g btn-s" onClick=${() => setStep("nome")}>Voltar</button>
                   <button class="btn btn-1" disabled=${busy || stripeBusy} onClick=${pagarComStripe}>
-                    ${busy || stripeBusy ? "Abrindo…" : store.live ? `Pagar ${eur(price)} com Stripe` : "Entrar na lista"}
+                    ${busy || stripeBusy ? "Abrindo…" : store.live ? `Pagar ${eur(price)}` : "Entrar na lista"}
                   </button>
                 </div>
               </div>`}
