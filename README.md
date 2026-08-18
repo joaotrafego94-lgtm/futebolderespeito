@@ -46,14 +46,13 @@ Sem isto o app funciona, mas ninguém consegue pagar pelo app — o botão "Paga
 
 1. Uma conta Stripe (quem já tem um link de pagamento do Stripe já tem conta).
 2. Pegar a **chave secreta** — painel do Stripe → **Desenvolvedores → Chaves de API** → "Chave secreta" (começa com `sk_test_` pra testar, ou `sk_live_` pra valer).
-3. Pegar a **chave de serviço** do Supabase — painel do Supabase → **Settings → API** → chave `service_role`. Essa chave dá acesso total ao banco: nunca cola ela em nenhum outro lugar além do passo abaixo.
-4. No painel do Supabase → **Edge Functions**, criar duas funções (o painel deixa colar o código direto num editor, sem precisar instalar nada):
+3. No painel do Supabase → **Edge Functions**, criar duas funções (o painel deixa colar o código direto num editor, sem precisar instalar nada):
    - `stripe-create-session` — cola o conteúdo de `supabase/functions/stripe-create-session/index.ts`
    - `stripe-verify-session` — cola o conteúdo de `supabase/functions/stripe-verify-session/index.ts`
-5. Em cada uma das duas funções, na aba **Secrets**, adicionar:
-   - `STRIPE_SECRET_KEY` — a chave do passo 2
-   - `SUPABASE_SERVICE_ROLE_KEY` — a chave do passo 3
-6. Clicar em **Deploy** nas duas.
+4. Em cada uma das duas funções, na aba **Secrets**, adicionar só `STRIPE_SECRET_KEY` com a chave do passo 2. **Não** adicionar `SUPABASE_SERVICE_ROLE_KEY` nem `SUPABASE_URL` — essas duas já existem automaticamente em toda Edge Function; o Supabase nem deixa criar um secret com nome começado por `SUPABASE_`, é reservado.
+5. Clicar em **Deploy** nas duas.
+
+A chave secreta nunca vai dentro do código das funções — só nesse separador **Secrets**. O código lê o nome (`Deno.env.get("STRIPE_SECRET_KEY")`), nunca o valor.
 
 **Testar antes de valer:** usa a chave `sk_test_...` primeiro, e paga com um [cartão de teste do Stripe](https://stripe.com/docs/testing) (nenhum dinheiro de verdade se mexe). Só depois de ver o pagamento confirmar sozinho no app, troca a chave pela `sk_live_...`.
 

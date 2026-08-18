@@ -3,11 +3,11 @@
 // substitui o clique manual do organizador -- ninguém entra na lista
 // "de graça" só por dizer que pagou; o Stripe é quem confirma.
 //
-// Mesmos secrets da stripe-create-session (podem ser configurados
-// uma vez e reaproveitados, se o painel do Supabase permitir secrets
-// compartilhados entre funções; senão, configura nas duas):
+// Mesmo secret da stripe-create-session:
 //   STRIPE_SECRET_KEY
-//   SUPABASE_SERVICE_ROLE_KEY
+//
+// SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY já existem automaticamente
+// no ambiente de toda Edge Function -- não precisa configurar.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

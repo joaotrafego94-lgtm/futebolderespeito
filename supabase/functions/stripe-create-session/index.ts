@@ -3,12 +3,13 @@
 // pra ninguém conseguir adulterar o valor mandando um número diferente
 // na requisição.
 //
-// Precisa de dois secrets configurados nesta função, no painel do
+// Precisa de UM secret configurado nesta função, no painel do
 // Supabase (Edge Functions -> stripe-create-session -> Secrets):
-//   STRIPE_SECRET_KEY         -- chave secreta do Stripe (sk_...)
-//   SUPABASE_SERVICE_ROLE_KEY -- chave de serviço do Supabase
+//   STRIPE_SECRET_KEY -- chave secreta do Stripe (sk_...)
 //
-// SUPABASE_URL já existe automaticamente no ambiente de toda Edge Function.
+// SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY já existem automaticamente
+// no ambiente de toda Edge Function -- o Supabase nem deixa criar um
+// secret com esses nomes, é reservado. Não precisa configurar.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
