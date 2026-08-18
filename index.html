@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Futebol de Respeito</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background:#F9FAFB; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* ============================================================
+   CONFIGURAÇÃO SUPABASE
+   Substitui os dois valores abaixo pelos do teu projeto Supabase
+   (Project Settings -> API). Enquanto estiverem por preencher,
+   a app usa localStorage (só neste dispositivo) como reserva.
+   ============================================================ */
+const SUPABASE_URL = "COLOCAR_AQUI";
+const SUPABASE_ANON_KEY = "COLOCAR_AQUI";
+
+const supabaseConfigured = SUPABASE_URL !== "COLOCAR_AQUI" && SUPABASE_ANON_KEY !== "COLOCAR_AQUI";
+const supabase = supabaseConfigured && window.supabase
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+const TEAM_DEFS = [
+  { name: "Time 1", color: "#2563EB", light: "#EFF4FE" },
+  { name: "Time 2", color: "#16A34A", light: "#EEF8F1" },
+  { name: "Time 3", color: "#D97706", light: "#FDF3E7" },
+];
+
+const IBAN = "PT50 0007 0000 0658 0592 5323";
+const MBWAY = "+351 914 068 950";
+const MAPS_LINK = "https://maps.app.goo.gl/aCSuyV77kXDmsYV47?g_st=ic";
+const STORAGE_KEY = "futebolderespeito-state";
+
+function nextSunday() {
+  const d = new Date();
+  const day = d.getDay();
+  const add = (7 - day) % 7 || 7;
+  d.setDate(d.getDate() + (day === 0 ? 0 : add));
+  return d.toISOString().slice(0, 10);
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* ============================================================
+   CAMADA DE DADOS
+   Se o Supabase estiver configurado, os jogadores ficam
+   guardados na tabela "players" (ver supabase/schema.sql) e
+   partilhados entre todos os dispositivos que abrirem o site
+   para a mesma data. Sem Supabase configurado, cai para
+   localStorage (só neste aparelho).
+   ============================================================ */
+async function dbFetchPlayers(date) {
+  if (!supabase) return null; // sinaliza para usar localStorage
+  const { data, error } = await supabase
+    .from("players")
+    .select("*")
+    .eq("game_date", date)
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("Erro a carregar jogadores:", error);
+    return [];
+  }
+  return data.map((r) => ({ id: r.id, name: r.name, paid: r.paid }));
+}
+
+async function dbAddPlayer(date, name) {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("players")
+    .insert({ name, paid: false, game_date: date })
+    .select()
+    .single();
+  if (error) console.error("Erro a adicionar jogador:", error);
+  return data;
+}
+
+async function dbTogglePaid(id, paid) {
+  if (!supabase) return;
+  const { error } = await supabase.from("players").update({ paid }).eq("id", id);
+  if (error) console.error("Erro a atualizar pagamento:", error);
+}
+
+async function dbRemovePlayer(id) {
+  if (!supabase) return;
+  const { error } = await supabase.from("players").delete().eq("id", id);
+  if (error) console.error("Erro a remover jogador:", error);
+}
+
+function dbSubscribe(date, onChange) {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`players-${date}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "players", filter: `game_date=eq.${date}` },
+      onChange
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+function CopyField({ label, value }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (e) {}
+  }
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg" style={{ background: "#F3F4F6" }}>
+      <div>
+        <div className="text-xs" style={{ color: "#6B7280" }}>{label}</div>
+        <div className="text-sm font-medium" style={{ color: "#111827" }}>{value}</div>
+      </div>
+      <button
+        onClick={copy}
+        className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-md shrink-0"
+        style={{ background: copied ? "#16A34A" : "#2563EB", color: "#FFFFFF" }}
+      >
+        {copied ? "✓ Copiado" : "Copiar"}
+      </button>
+    </div>
+  );
+}
+
+function App() {
+  const [loaded, setLoaded] = useState(false);
+  const [players, setPlayers] = useState([]);
+  const [date, setDate] = useState(nextSunday());
+  const [time, setTime] = useState("10:00");
+  const [slots, setSlots] = useState(15);
+  const [newName, setNewName] = useState("");
+  const [teams, setTeams] = useState(null);
+  const [shuffling, setShuffling] = useState(false);
+  const [listCopied, setListCopied] = useState(false);
+  const intervalRef = useRef(null);
+
+  // Carrega config local (data, hora, vagas, sorteio) — estes campos ficam
+  // sempre no localStorage, só a lista de jogadores é que pode ser partilhada.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        setDate(s.date || nextSunday());
+        setTime(s.time || "10:00");
+        setSlots(s.slots || 15);
+        setTeams(s.teams || null);
+        if (!supabase) setPlayers(s.players || []);
+      }
+    } catch (e) {}
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ players: supabase ? [] : players, date, time, slots, teams }));
+    } catch (e) {}
+  }, [players, date, time, slots, teams, loaded]);
+
+  // Carrega e subscreve jogadores da data escolhida (via Supabase, se configurado)
+  useEffect(() => {
+    if (!loaded || !supabase) return;
+    let active = true;
+    (async () => {
+      const rows = await dbFetchPlayers(date);
+      if (active && rows) setPlayers(rows);
+    })();
+    const unsubscribe = dbSubscribe(date, async () => {
+      const rows = await dbFetchPlayers(date);
+      if (active && rows) setPlayers(rows);
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [date, loaded]);
+
+  const paidCount = players.filter((p) => p.paid).length;
+  const pct = players.length ? Math.round((paidCount / players.length) * 100) : 0;
+  const full = players.length >= slots;
+
+  async function addPlayer() {
+    const name = newName.trim();
+    if (!name) return;
+    setNewName("");
+    setTeams(null);
+    if (supabase) {
+      const row = await dbAddPlayer(date, name);
+      if (row) setPlayers((p) => [...p, { id: row.id, name: row.name, paid: row.paid }]);
+    } else {
+      setPlayers((p) => [...p, { id: Date.now() + Math.random(), name, paid: false }]);
+    }
+  }
+
+  async function togglePaid(id) {
+    const player = players.find((p) => p.id === id);
+    if (!player) return;
+    const newPaid = !player.paid;
+    setPlayers((p) => p.map((pl) => (pl.id === id ? { ...pl, paid: newPaid } : pl)));
+    if (supabase) await dbTogglePaid(id, newPaid);
+  }
+
+  async function removePlayer(id, name) {
+    if (!window.confirm(`Remover ${name} da lista?`)) return;
+    setPlayers((p) => p.filter((pl) => pl.id !== id));
+    setTeams(null);
+    if (supabase) await dbRemovePlayer(id);
+  }
+
+  function novaSemana() {
+    if (!window.confirm("Começar uma nova semana? A data avança para o próximo domingo (a lista dessa nova data começa vazia).")) return;
+    setTeams(null);
+    setDate(nextSunday());
+  }
+
+  function drawTeams() {
+    if (players.length < 3) return;
+    setShuffling(true);
+    let ticks = 0;
+    const maxTicks = 10;
+    intervalRef.current = setInterval(() => {
+      ticks++;
+      const shuffled = shuffle(players);
+      const preview = [[], [], []];
+      shuffled.forEach((pl, i) => preview[i % 3].push(pl.name));
+      setTeams(preview);
+      if (ticks >= maxTicks) {
+        clearInterval(intervalRef.current);
+        setShuffling(false);
+      }
+    }, 90);
+  }
+
+  async function copyList() {
+    const weekdayShort = new Date(date + "T00:00:00").toLocaleDateString("pt-PT", { weekday: "long", day: "numeric", month: "long" });
+    const lines = [];
+    lines.push(`⚽ Futebol de Respeito`);
+    lines.push(`${weekdayShort} · ${time}`);
+    lines.push(MAPS_LINK);
+    lines.push("");
+    lines.push(`Jogadores (${players.length}/${slots}):`);
+    players.forEach((p, i) => {
+      lines.push(`${i + 1}. ${p.name} - ${p.paid ? "✅ Pago" : "⏳ Por pagar"}`);
+    });
+    lines.push("");
+    lines.push(`IBAN: ${IBAN}`);
+    lines.push(`MB Way: ${MBWAY}`);
+    const text = lines.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setListCopied(true);
+      setTimeout(() => setListCopied(false), 1500);
+    } catch (e) {}
+  }
+
+  const weekday = new Date(date + "T00:00:00").toLocaleDateString("pt-PT", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
+  return (
+    <div style={{ minHeight: "100vh", color: "#111827" }}>
+      <div className="max-w-2xl mx-auto px-5 py-6 sm:py-8 flex flex-col gap-4">
+
+        {!supabaseConfigured && (
+          <div className="rounded-lg px-3 py-2 text-xs font-medium" style={{ background: "#FEF3C7", color: "#92400E" }}>
+            Supabase não configurado — a lista está guardada só neste dispositivo. Preenche SUPABASE_URL e SUPABASE_ANON_KEY no topo do ficheiro para partilhar entre todos.
+          </div>
+        )}
+
+        <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-xs font-medium mb-1 block" style={{ color: "#6B7280" }}>Data</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
+                style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", color: "#111827" }}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block" style={{ color: "#6B7280" }}>Hora</label>
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full text-sm px-3 py-2 rounded-lg outline-none"
+                style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", color: "#111827" }}
+              />
+            </div>
+          </div>
+          <a
+            href={MAPS_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg"
+            style={{ background: "#F3F4F6", color: "#2563EB" }}
+          >
+            Ver local no Google Maps
+          </a>
+          <div className="text-sm capitalize mt-2" style={{ color: "#6B7280" }}>
+            {weekday} {time && `· ${time}`}
+          </div>
+          <button
+            onClick={novaSemana}
+            className="w-full mt-3 text-sm font-medium px-3 py-2 rounded-lg"
+            style={{ background: "#FEF3C7", color: "#92400E" }}
+          >
+            Nova semana (avançar data)
+          </button>
+        </div>
+
+        <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}>
+          <div className="text-xs font-medium mb-2" style={{ color: "#6B7280" }}>Pagamento</div>
+          <div className="flex flex-col gap-2">
+            <CopyField label="IBAN" value={IBAN} />
+            <CopyField label="MB Way" value={MBWAY} />
+          </div>
+        </div>
+
+        <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium" style={{ color: "#6B7280" }}>Pagamentos confirmados</span>
+            <span className="text-sm font-semibold" style={{ color: "#111827" }}>{paidCount}/{players.length}</span>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden" style={{ background: "#E5E7EB" }}>
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "#16A34A", transition: "width 0.4s ease" }} />
+          </div>
+        </div>
+
+        <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-medium" style={{ color: "#6B7280" }}>Jogadores</div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: "#6B7280" }}>Vagas</span>
+              <input
+                type="number"
+                min="1"
+                value={slots}
+                onChange={(e) => setSlots(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-14 text-sm px-2 py-1 rounded-lg outline-none text-center"
+                style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", color: "#111827" }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mb-3 px-3 py-2 rounded-lg" style={{ background: full ? "#FEF2F2" : "#F3F4F6" }}>
+            <span className="text-sm font-medium" style={{ color: full ? "#B91C1C" : "#111827" }}>
+              {players.length}/{slots} preenchidas
+            </span>
+            {full && <span className="text-xs font-semibold" style={{ color: "#B91C1C" }}>LOTADO</span>}
+          </div>
+
+          <div className="flex gap-2 mb-3">
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addPlayer()}
+              placeholder="Nome do jogador"
+              className="flex-1 text-sm px-3 py-2 rounded-lg outline-none"
+              style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", color: "#111827" }}
+            />
+            <button onClick={addPlayer} className="px-3 py-2 rounded-lg" style={{ background: "#2563EB", color: "#FFFFFF" }}>+</button>
+          </div>
+
+          {players.length === 0 && (
+            <div className="text-sm py-4 text-center" style={{ color: "#9CA3AF" }}>Ainda sem jogadores na lista.</div>
+          )}
+
+          <div className="flex flex-col gap-1.5 mb-3">
+            {players.map((p, i) => (
+              <div key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: "#F9FAFB" }}>
+                <span className="text-xs w-5 text-right" style={{ color: "#9CA3AF" }}>{i + 1}.</span>
+                <span className="flex-1 text-sm font-medium" style={{ color: "#111827" }}>{p.name}</span>
+                <button
+                  onClick={() => togglePaid(p.id)}
+                  className="text-xs font-medium px-2.5 py-1 rounded-full"
+                  style={p.paid ? { background: "#16A34A", color: "#FFFFFF" } : { background: "#E5E7EB", color: "#6B7280" }}
+                >
+                  {p.paid ? "Pago" : "Por pagar"}
+                </button>
+                <button onClick={() => removePlayer(p.id, p.name)} className="p-1.5 rounded-lg" style={{ color: "#DC2626" }}>✕</button>
+              </div>
+            ))}
+          </div>
+
+          {players.length > 0 && (
+            <button
+              onClick={copyList}
+              className="w-full text-sm font-medium px-3 py-2 rounded-lg"
+              style={{ background: listCopied ? "#16A34A" : "#111827", color: "#FFFFFF" }}
+            >
+              {listCopied ? "✓ Lista copiada" : "Copiar lista para WhatsApp"}
+            </button>
+          )}
+        </div>
+
+        <div className="rounded-xl p-4" style={{ background: "#FFFFFF", border: "1px solid #E5E7EB" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-medium" style={{ color: "#6B7280" }}>Sorteio de equipas</div>
+            <button
+              onClick={drawTeams}
+              disabled={players.length < 3 || shuffling}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium disabled:opacity-40"
+              style={{ background: "#111827", color: "#FFFFFF" }}
+            >
+              {shuffling ? "A sortear…" : "Sortear"}
+            </button>
+          </div>
+
+          {players.length > 0 && players.length < 3 && (
+            <div className="text-sm" style={{ color: "#9CA3AF" }}>Precisas de pelo menos 3 jogadores para sortear.</div>
+          )}
+
+          {teams && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {teams.map((team, ti) => (
+                <div key={ti} className="rounded-lg p-3" style={{ background: TEAM_DEFS[ti].light }}>
+                  <div className="text-sm font-semibold mb-2 pb-1" style={{ color: TEAM_DEFS[ti].color, borderBottom: `2px solid ${TEAM_DEFS[ti].color}` }}>
+                    {TEAM_DEFS[ti].name}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {team.map((name, ni) => (<div key={ni} className="text-sm" style={{ color: "#111827" }}>{name}</div>))}
+                    {team.length === 0 && <div className="text-xs italic" style={{ color: "#9CA3AF" }}>sem jogador</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="text-center text-xs" style={{ color: "#9CA3AF" }}>
+          {supabaseConfigured ? "Lista partilhada em tempo real." : "Guardado automaticamente neste dispositivo."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
