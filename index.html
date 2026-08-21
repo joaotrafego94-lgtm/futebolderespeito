@@ -165,6 +165,8 @@ label{display:block;color:var(--bg);margin-bottom:6px}
 .x{width:24px;height:24px;border-radius:6px;color:var(--faint);flex:none;font-size:13px;
   transition:color .18s var(--ease),background .18s var(--ease)}
 .x:active{background:rgba(0,87,184,.14);color:var(--blue)}
+.x.ok{color:var(--gold-deep)}
+.x.ok:active{background:rgba(224,168,0,.18);color:var(--gold-deep)}
 .empty{text-align:center;color:var(--faint);font-size:13.5px;padding:var(--s6) 0;line-height:1.6}
 
 /* ---------- pagamentos ---------- */
@@ -1039,13 +1041,15 @@ function App({ store }) {
     <div class=${`row${souEu ? " mine" : ""}${sub ? " sub" : ""}`} key=${p.id}>
       <span class="num">${i + 1}</span>
       <span class="nm">${p.name}${souEu ? html`<i>VOCÊ</i>` : null}</span>
-      ${isOrganizer
-        ? html`<button class=${`tag ${p.paid ? "tag-ok" : "tag-no"}`} onClick=${() => togglePago(p)}>
-            ${p.paid ? "Pago" : "Pendente"}
-          </button>`
-        : !p.paid && store.live
-          ? html`<button class="tag tag-no" disabled=${stripeBusy} onClick=${() => pagarPendente(p)}>Pagar agora</button>`
+      ${!p.paid && store.live
+        ? html`<button class="tag tag-no" disabled=${stripeBusy} onClick=${() => pagarPendente(p)}>Pagar agora</button>`
+        : isOrganizer
+          ? html`<button class=${`tag ${p.paid ? "tag-ok" : "tag-no"}`} onClick=${() => togglePago(p)}>
+              ${p.paid ? "Pago" : "Pendente"}
+            </button>`
           : html`<span class=${`tag ${p.paid ? "tag-ok" : "tag-no"}`}>${p.paid ? "Pago" : "Pendente"}</span>`}
+      ${isOrganizer && !p.paid && store.live && html`
+        <button class="x ok" onClick=${() => togglePago(p)} aria-label="Marcar como pago manualmente" title="Marcar como pago manualmente">✓</button>`}
       ${podeRemover && html`<button class="x" onClick=${() => sair(p)} aria-label="Tirar da lista">✕</button>`}
     </div>`;
   };
