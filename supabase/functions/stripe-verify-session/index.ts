@@ -1,7 +1,16 @@
 // Confere no Stripe se uma sessão de pagamento foi paga de verdade,
-// e só então marca o jogador como pago no banco. É esta função que
-// substitui o clique manual do organizador -- ninguém entra na lista
-// "de graça" só por dizer que pagou; o Stripe é quem confirma.
+// e só então grava o pagamento no banco. É esta função que decide,
+// não a tela: ninguém entra na lista, nem fica pendente, só por
+// dizer que pagou.
+//
+// Dois casos, conforme o metadata que a stripe-create-session gravou:
+//
+//   metadata.player_id                       -- vaga já existia
+//     (alguém pagando por quem foi adicionado sem celular). Só
+//     confirma o paid=true nessa vaga.
+//   metadata.name / game_date / token        -- entrada nova. A vaga
+//     só é criada AGORA, já paga -- se a pessoa tivesse desistido no
+//     meio do pagamento, nunca teria chegado a existir.
 //
 // Mesmo secret da stripe-create-session:
 //   STRIPE_SECRET_KEY
@@ -42,8 +51,6 @@ Deno.serve(async (req) => {
   const sessionId = body.session_id;
   if (!sessionId) return json({ error: "session_id é obrigatório" }, 400);
 
-  // Pergunta ao Stripe -- nunca confia no que o navegador diz sobre
-  // si mesmo. É este fetch que é a fonte da verdade.
   const stripeRes = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, {
     headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` },
   });
@@ -57,28 +64,62 @@ Deno.serve(async (req) => {
     return json({ ok: false, motivo: "Pagamento ainda não confirmado pelo Stripe" });
   }
 
-  const playerId = session.client_reference_id;
-  if (!playerId) return json({ error: "Sessão sem jogador associado" }, 400);
+  const dbHeaders = { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` };
+  const meta = session.metadata || {};
 
-  // where=eq.false: idempotente -- se já estava pago (ex.: a pessoa
-  // recarregou a página), não sobrescreve o paid_at original.
-  const updateRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/players?id=eq.${playerId}&paid=eq.false`,
-    {
-      method: "PATCH",
-      headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-      },
-      body: JSON.stringify({ paid: true, paid_at: new Date().toISOString() }),
+  // Caso 1: vaga já existia (alguém pagando por quem foi adicionado
+  // sem celular). where=paid=eq.false: idempotente, não sobrescreve
+  // se já tiver sido confirmado antes.
+  if (meta.player_id) {
+    const updateRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/players?id=eq.${meta.player_id}&paid=eq.false`,
+      {
+        method: "PATCH",
+        headers: { ...dbHeaders, "Content-Type": "application/json", Prefer: "return=representation" },
+        body: JSON.stringify({ paid: true, paid_at: new Date().toISOString() }),
+      }
+    );
+    if (!updateRes.ok) {
+      console.error("Falhou marcar paid=true:", await updateRes.text());
+      return json({ error: "Pagamento confirmado no Stripe, mas não deu pra salvar no banco" }, 500);
     }
+    return json({ ok: true, player_id: meta.player_id });
+  }
+
+  // Caso 2: entrada nova. A vaga só passa a existir agora.
+  const name = meta.name;
+  const gameDate = meta.game_date;
+  const token = meta.token;
+  if (!name || !gameDate || !token) return json({ error: "Sessão sem dados do jogador" }, 400);
+
+  // Idempotente: se esta sessão já tiver sido confirmada antes (ex.: a
+  // pessoa recarregou a página de volta), não cria uma vaga duplicada.
+  const claimRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/player_claims?token=eq.${token}&select=player_id`,
+    { headers: dbHeaders }
   );
-  if (!updateRes.ok) {
-    console.error("Falhou marcar paid=true:", await updateRes.text());
+  const claims = await claimRes.json();
+  if (claims && claims[0]) return json({ ok: true, player_id: claims[0].player_id, name });
+
+  const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/players`, {
+    method: "POST",
+    headers: { ...dbHeaders, "Content-Type": "application/json", Prefer: "return=representation" },
+    body: JSON.stringify({ game_date: gameDate, name, paid: true, paid_at: new Date().toISOString() }),
+  });
+  const inserted = await insertRes.json();
+  const player = inserted && inserted[0];
+  if (!insertRes.ok || !player) {
+    console.error("Falhou criar jogador pago:", inserted);
     return json({ error: "Pagamento confirmado no Stripe, mas não deu pra salvar no banco" }, 500);
   }
 
-  return json({ ok: true });
+  // Guarda o token pra idempotência e pra essa pessoa poder sair da
+  // própria vaga depois (mesmo mecanismo do join_game).
+  await fetch(`${SUPABASE_URL}/rest/v1/player_claims`, {
+    method: "POST",
+    headers: { ...dbHeaders, "Content-Type": "application/json" },
+    body: JSON.stringify({ player_id: player.id, token }),
+  });
+
+  return json({ ok: true, player_id: player.id, name });
 });

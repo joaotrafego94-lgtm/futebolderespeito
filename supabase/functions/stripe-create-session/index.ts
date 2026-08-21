@@ -1,7 +1,17 @@
-// Cria uma sessão de pagamento no Stripe pro jogador que acabou de
-// entrar na lista. O preço vem SEMPRE do banco (nunca do navegador),
-// pra ninguém conseguir adulterar o valor mandando um número diferente
-// na requisição.
+// Cria uma sessão de pagamento no Stripe. Dois modos:
+//
+//   { player_id }              -- alguém já está pendente na lista
+//                                 (ex.: foi adicionado por um amigo sem
+//                                 celular) e quer pagar agora.
+//   { name, game_date, token } -- entrada nova. NÃO cria a vaga aqui --
+//                                 só depois que o Stripe confirmar que
+//                                 pagou (stripe-verify-session). Assim,
+//                                 quem desiste no meio do pagamento não
+//                                 deixa um nome fantasma em "Aguardando
+//                                 pagamento" pra sempre.
+//
+// O preço vem SEMPRE do banco (nunca do navegador), pra ninguém
+// conseguir adulterar o valor mandando um número diferente na requisição.
 //
 // Precisa de UM secret configurado nesta função, no painel do
 // Supabase (Edge Functions -> stripe-create-session -> Secrets):
@@ -35,29 +45,44 @@ Deno.serve(async (req) => {
     return json({ error: "Faltam secrets configurados nesta função" }, 500);
   }
 
-  let body: { player_id?: string };
+  let body: { player_id?: string; name?: string; game_date?: string; token?: string };
   try {
     body = await req.json();
   } catch {
     return json({ error: "Corpo inválido" }, 400);
   }
-  const playerId = body.player_id;
-  if (!playerId) return json({ error: "player_id é obrigatório" }, 400);
 
-  // Busca o jogador e o jogo dele direto no banco, com a chave de
-  // serviço (ignora RLS de propósito -- esta função É a autoridade).
-  const playerRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/players?id=eq.${playerId}&select=id,name,paid,game_date`,
-    { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } }
-  );
-  const players = await playerRes.json();
-  const player = players && players[0];
-  if (!player) return json({ error: "Jogador não encontrado" }, 404);
-  if (player.paid) return json({ error: "Esse jogador já está marcado como pago" }, 400);
+  const dbHeaders = { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` };
+
+  let gameDate: string;
+  let metadata: Record<string, string>;
+  let description: string;
+
+  if (body.player_id) {
+    const playerRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/players?id=eq.${body.player_id}&select=id,name,paid,game_date`,
+      { headers: dbHeaders }
+    );
+    const players = await playerRes.json();
+    const player = players && players[0];
+    if (!player) return json({ error: "Jogador não encontrado" }, 404);
+    if (player.paid) return json({ error: "Esse jogador já está marcado como pago" }, 400);
+    gameDate = player.game_date;
+    metadata = { player_id: body.player_id };
+    description = `Pelada de ${gameDate} — ${player.name}`;
+  } else {
+    const name = (body.name || "").trim();
+    if (!name || name.length > 60) return json({ error: "Nome inválido" }, 400);
+    if (!body.game_date) return json({ error: "game_date é obrigatório" }, 400);
+    if (!body.token) return json({ error: "token é obrigatório" }, 400);
+    gameDate = body.game_date;
+    metadata = { name, game_date: gameDate, token: body.token };
+    description = `Pelada de ${gameDate} — ${name}`;
+  }
 
   const gameRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/games?game_date=eq.${player.game_date}&select=game_date,price`,
-    { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } }
+    `${SUPABASE_URL}/rest/v1/games?game_date=eq.${gameDate}&select=game_date,price`,
+    { headers: dbHeaders }
   );
   const games = await gameRes.json();
   const game = games && games[0];
@@ -66,28 +91,17 @@ Deno.serve(async (req) => {
   const price = Number(game.price || 0);
   if (price <= 0) return json({ error: "Esse jogo não tem valor definido" }, 400);
 
-  // success_url/cancel_url apontam pro mesmo site que chamou esta
-  // função -- funciona tanto em produção quanto testando localmente.
   const origin = req.headers.get("origin") || "https://futebolderespeito.vercel.app";
-  const successUrl = `${origin}/?session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${origin}/`;
-
   const params = new URLSearchParams();
   params.set("mode", "payment");
-  params.set("client_reference_id", playerId);
-  params.set("success_url", successUrl);
-  params.set("cancel_url", cancelUrl);
-  // Sem "payment_method_types", o Checkout Session já mostra sozinho
-  // os métodos ativos na conta (MB Way, Cartão, Klarna, Bancontact...)
-  // -- é o comportamento padrão da API, não precisa pedir de propósito.
+  params.set("success_url", `${origin}/?session_id={CHECKOUT_SESSION_ID}`);
+  params.set("cancel_url", `${origin}/`);
+  for (const [k, v] of Object.entries(metadata)) params.set(`metadata[${k}]`, v);
   params.set("line_items[0][quantity]", "1");
   params.set("line_items[0][price_data][currency]", "eur");
   params.set("line_items[0][price_data][unit_amount]", String(Math.round(price * 100)));
   params.set("line_items[0][price_data][product_data][name]", "Futebol de Respeito");
-  params.set(
-    "line_items[0][price_data][product_data][description]",
-    `Pelada de ${game.game_date} — ${player.name}`
-  );
+  params.set("line_items[0][price_data][product_data][description]", description);
 
   const stripeRes = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
