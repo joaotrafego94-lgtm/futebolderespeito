@@ -46,17 +46,36 @@ Sem isto o app funciona, mas ninguém consegue pagar pelo app — o botão "Paga
 
 1. Uma conta Stripe (quem já tem um link de pagamento do Stripe já tem conta).
 2. Pegar a **chave secreta** — painel do Stripe → **Desenvolvedores → Chaves de API** → "Chave secreta" (começa com `sk_test_` pra testar, ou `sk_live_` pra valer).
-3. No painel do Supabase → **Edge Functions**, criar duas funções (o painel deixa colar o código direto num editor, sem precisar instalar nada):
+3. No painel do Supabase → **Edge Functions**, criar três funções (o painel deixa colar o código direto num editor, sem precisar instalar nada):
    - `stripe-create-session` — cola o conteúdo de `supabase/functions/stripe-create-session/index.ts`
    - `stripe-verify-session` — cola o conteúdo de `supabase/functions/stripe-verify-session/index.ts`
-4. Em cada uma das duas funções, na aba **Secrets**, adicionar só `STRIPE_SECRET_KEY` com a chave do passo 2. **Não** adicionar `SUPABASE_SERVICE_ROLE_KEY` nem `SUPABASE_URL` — essas duas já existem automaticamente em toda Edge Function; o Supabase nem deixa criar um secret com nome começado por `SUPABASE_`, é reservado.
-5. Clicar em **Deploy** nas duas.
+   - `stripe-webhook` — cola o conteúdo de `supabase/functions/stripe-webhook/index.ts`
+4. Em `stripe-create-session` e `stripe-verify-session`, na aba **Secrets**, adicionar só `STRIPE_SECRET_KEY` com a chave do passo 2. **Não** adicionar `SUPABASE_SERVICE_ROLE_KEY` nem `SUPABASE_URL` — essas duas já existem automaticamente em toda Edge Function; o Supabase nem deixa criar um secret com nome começado por `SUPABASE_`, é reservado.
+5. Clicar em **Deploy** nas três.
 
 A chave secreta nunca vai dentro do código das funções — só nesse separador **Secrets**. O código lê o nome (`Deno.env.get("STRIPE_SECRET_KEY")`), nunca o valor.
 
 **Testar antes de valer:** usa a chave `sk_test_...` primeiro, e paga com um [cartão de teste do Stripe](https://stripe.com/docs/testing) (nenhum dinheiro de verdade se mexe). Só depois de ver o pagamento confirmar sozinho no app, troca a chave pela `sk_live_...`.
 
-O valor cobrado vem sempre do campo **Valor por jogador** do jogo daquela semana — nunca fica preso a um número fixo. Ninguém no navegador consegue mudar esse valor: as duas funções sempre confirmam o preço direto no banco antes de cobrar ou de aceitar como pago.
+O valor cobrado vem sempre do campo **Valor por jogador** do jogo daquela semana — nunca fica preso a um número fixo. Ninguém no navegador consegue mudar esse valor: as funções sempre confirmam o preço direto no banco antes de cobrar ou de aceitar como pago.
+
+---
+
+## Webhook: confirma o pagamento mesmo se a pessoa não voltar pro site
+
+A `stripe-verify-session` (acima) só confirma quando a pessoa é redirecionada de volta pro app depois de pagar. Se ela fechar a aba do Stripe antes disso — o que acontece de vez em quando, sobretudo no telemóvel — o pagamento passa, mas o app nunca fica a saber, e a pessoa fica presa em "Aguardando pagamento" apesar de ter pago. A função `stripe-webhook` resolve isso: o Stripe avisa-a diretamente, do lado do servidor, assim que aprova o pagamento — não depende do navegador de ninguém.
+
+**Configurar:**
+
+1. Depois de fazer o Deploy de `stripe-webhook` (passo acima), copia o URL dela — algo como `https://SEU-PROJETO.supabase.co/functions/v1/stripe-webhook`
+2. **Importante:** essa função tem de ficar acessível sem a verificação normal do Supabase, porque o Stripe não sabe mandar a chave `apikey`. Procura, nas definições dessa função (não no código), uma opção tipo **"Enforce JWT Verification"** ou **"Verify JWT"** e desliga-a — só para `stripe-webhook`, as outras duas continuam como estão. A segurança desta função vem de outro lado: ela confere sozinha, no código, que quem está a chamar é mesmo o Stripe (usando a assinatura que ele manda em cada pedido).
+3. No painel do Stripe → **Desenvolvedores → Webhooks → Add endpoint**
+4. Cola o URL do passo 1, e em "Events to send" escolhe só `checkout.session.completed`
+5. Depois de criar, o Stripe mostra um **Signing secret** (começa com `whsec_...`) — copia
+6. Volta ao Supabase, na função `stripe-webhook` → **Secrets**, adiciona `STRIPE_SECRET_KEY` (a mesma das outras) e `STRIPE_WEBHOOK_SECRET` (o `whsec_...` do passo 5)
+7. Deploy de novo
+
+**Testar:** no painel do Stripe, dentro do webhook criado, tem um botão "Send test webhook" — manda um evento `checkout.session.completed` de teste e confere se a função responde `200 ok`. O teste de verdade é o mesmo de sempre: pagar com o cartão de teste, mas desta vez fechando a aba do Stripe assim que aparecer "pagamento aprovado", sem esperar o redirecionamento — o nome deve entrar pago mesmo assim, em poucos segundos.
 
 ---
 
@@ -102,7 +121,8 @@ icon.svg / icon.png                 Ícone
 og.png                              Imagem do link compartilhado no WhatsApp
 supabase/schema.sql                 Tabelas, funções e regras de acesso
 supabase/functions/stripe-create-session   Cria a cobrança no Stripe
-supabase/functions/stripe-verify-session   Confirma o pagamento e libera a vaga
+supabase/functions/stripe-verify-session   Confirma quando a pessoa volta pro site
+supabase/functions/stripe-webhook          Confirma direto do Stripe, mesmo sem voltar
 ```
 
 ## Deploy
