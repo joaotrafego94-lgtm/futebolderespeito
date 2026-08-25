@@ -863,6 +863,7 @@ function App({ store }) {
   async function pagarComStripe() {
     const n = nome.trim();
     if (!n || busy || stripeBusy) return;
+    if (lotado) return say("Já não há vagas — nem como reserva, não sobrou lugar nenhum.");
 
     if (!store.live) {
       const duplicado = jaExiste(n);
@@ -925,6 +926,7 @@ function App({ store }) {
   async function adicionar() {
     const n = outro.trim();
     if (!n || busy) return;
+    if (lotado) return say("Já não há vagas — nem como reserva, não sobrou lugar nenhum.");
     const duplicado = jaExiste(n);
     setBusy(true);
     const row = await store.addPlayer(game.game_date, n, uuid());
@@ -1103,6 +1105,13 @@ function App({ store }) {
                   : html`<span>${souReserva ? `Reserva · ${myPaidIdx - slots + 1}º da fila · entra se alguém sair` : `Confirmado · ${myPaidIdx + 1}º · vaga garantida`}</span>`}
               </div>
             </div>`
+          : lotado
+            ? html`<div>
+                <div class="card-t lbl" style="margin-bottom:6px">Sua vaga</div>
+                <div class="empty" style="padding:0;text-align:left">
+                  Lotado — sem vagas nem como reserva. Só entra quem já está na lista.
+                </div>
+              </div>`
           : step === "nome"
             ? html`<div>
                 <div class="card-t lbl" style="margin-bottom:10px">Sua vaga</div>
@@ -1154,13 +1163,15 @@ function App({ store }) {
               : null}
           `}
 
-        <div class="inline" style="margin-top:16px">
-          <input value=${outro} placeholder="Adicionar outro jogador"
-            onInput=${(e) => setOutro(e.target.value)}
-            onKeyDown=${(e) => e.key === "Enter" && adicionar()} />
-          <button class="btn btn-g btn-s" style="padding-inline:18px" disabled=${!outro.trim() || busy}
-            onClick=${adicionar}>Add</button>
-        </div>
+        ${lotado
+          ? html`<div class="empty" style="padding-top:16px">Lotado — sem vagas nem como reserva.</div>`
+          : html`<div class="inline" style="margin-top:16px">
+              <input value=${outro} placeholder="Adicionar outro jogador"
+                onInput=${(e) => setOutro(e.target.value)}
+                onKeyDown=${(e) => e.key === "Enter" && adicionar()} />
+              <button class="btn btn-g btn-s" style="padding-inline:18px" disabled=${!outro.trim() || busy}
+                onClick=${adicionar}>Add</button>
+            </div>`}
 
         ${players.length > 0 && html`
           <button class="btn btn-2" style="margin-top:8px" onClick=${() => copiar(textoWhatsApp(), "Lista")}>

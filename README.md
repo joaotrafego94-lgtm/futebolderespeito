@@ -1,6 +1,6 @@
 # Futebol de Respeito
 
-App para organizar a pelada de domingo: lista de confirmados, fila de pagamento, reservas automáticas e sorteio de três times.
+App para organizar a pelada de domingo: lista de confirmados, fila de pagamento e sorteio de três times.
 
 Site estático, sem processo de build. Roda direto no navegador.
 
@@ -13,7 +13,7 @@ Site estático, sem processo de build. Roda direto no navegador.
 - **Um jogo de cada vez.** O app mostra sempre o próximo jogo com data igual ou posterior a hoje. Todo mundo que abre o link vê o mesmo jogo, a mesma hora e a mesma lista.
 - **A vaga só conta depois de paga.** Quem entra escreve o nome e paga na hora, pelo Stripe (cartão, MB Way, Klarna, Bancontact — o que estiver ativo na conta). Até o pagamento ser confirmado, a pessoa fica em **Aguardando pagamento**, sem ocupar vaga. Quem paga primeiro entra primeiro — mesmo que tenha escrito o nome depois de outra pessoa. Isso é de propósito: existe pra ninguém segurar a vaga sem pagar.
 - **Confirmação automática.** O Stripe avisa o app sozinho quando o pagamento é aprovado — ninguém precisa clicar em nada pra isso acontecer. O toggle manual (organizador) continua existindo como reserva, pra quando o Stripe falhar ou alguém pagar por fora excepcionalmente.
-- **Reservas automáticas.** Quem paga depois de as vagas esgotarem fica em Reservas, por ordem de pagamento.
+- **Sem lista de espera.** Assim que as vagas esgotam, ninguém mais entra — nem pagando, nem sendo adicionado por um amigo. Só continua na lista quem já estava.
 - **Aviso de prazo.** Quem ainda não pagou vê um aviso vermelho com a contagem até sexta-feira (2 dias antes do jogo).
 - **Só o organizador remove alguém, sorteia os times e abre o jogo da semana.** Ver a seção **Organizador** abaixo.
 - **Uma mensagem pro WhatsApp.** O botão copia a lista já formatada, com confirmados, reservas, quem ainda está pagando, e os times.
