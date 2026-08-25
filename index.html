@@ -660,7 +660,6 @@ function App({ store }) {
   const [loginErr, setLoginErr] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [nome, setNome] = useState("");
-  const [outro, setOutro] = useState("");
   const [step, setStep] = useState("nome"); // "nome" | "pagamento" — fluxo de Sua Vaga
   const [rolling, setRolling] = useState(false);
   const rollingRef = useRef(false);
@@ -923,20 +922,6 @@ function App({ store }) {
     }
   }
 
-  async function adicionar() {
-    const n = outro.trim();
-    if (!n || busy) return;
-    if (lotado) return say("Já não há vagas — nem como reserva, não sobrou lugar nenhum.");
-    const duplicado = jaExiste(n);
-    setBusy(true);
-    const row = await store.addPlayer(game.game_date, n, uuid());
-    setBusy(false);
-    if (!row) return say("Não deu pra adicionar");
-    setOutro("");
-    setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
-    say(duplicado ? `Já tem um ${n} na lista — de olho pra não confundir` : `${row.name} na lista`);
-  }
-
   async function togglePago(p) {
     if (!isOrganizer) return;
     const novo = !p.paid;
@@ -1162,16 +1147,6 @@ function App({ store }) {
                 </div>`
               : null}
           `}
-
-        ${lotado
-          ? html`<div class="empty" style="padding-top:16px">Lotado — sem vagas nem como reserva.</div>`
-          : html`<div class="inline" style="margin-top:16px">
-              <input value=${outro} placeholder="Adicionar outro jogador"
-                onInput=${(e) => setOutro(e.target.value)}
-                onKeyDown=${(e) => e.key === "Enter" && adicionar()} />
-              <button class="btn btn-g btn-s" style="padding-inline:18px" disabled=${!outro.trim() || busy}
-                onClick=${adicionar}>Add</button>
-            </div>`}
 
         ${players.length > 0 && html`
           <button class="btn btn-2" style="margin-top:8px" onClick=${() => copiar(textoWhatsApp(), "Lista")}>
