@@ -440,6 +440,15 @@ function localStore() {
       return true;
     },
     async adminRemovePlayer(id) { return this.removePlayer(id); },
+    // Organizador cadastra alguém que não paga pelo app (dinheiro na
+    // mão, PIX por fora etc.) — entra direto como confirmado.
+    async adminAddPlayer(date, name) {
+      const s = read();
+      const row = { id: `l${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name, paid: true, paid_at: new Date().toISOString() };
+      s.players = [...(s.players || []), row];
+      write(s);
+      return row;
+    },
     async adminOpenGame(patch) {
       const s = read();
       const game = { ...DEFAULTS, ...patch, game_date: patch.game_date || nextSunday(), teams: null };
@@ -539,6 +548,16 @@ async function remoteStore() {
       const { error } = await sb.from("players").delete().eq("id", id);
       if (error) { console.error(error); return false; }
       return true;
+    },
+    // Organizador cadastra alguém que não paga pelo app (dinheiro na
+    // mão, PIX por fora etc.) — entra direto como confirmado, sem
+    // passar pelo Stripe. Só funciona logado (RLS).
+    async adminAddPlayer(date, name) {
+      const { data, error } = await sb.from("players")
+        .insert({ game_date: date, name, paid: true, paid_at: new Date().toISOString() })
+        .select().single();
+      if (error) { console.error(error); return null; }
+      return { id: data.id, name: data.name, paid: data.paid, paid_at: data.paid_at };
     },
     async adminOpenGame(patch) {
       const row = {
@@ -660,6 +679,7 @@ function App({ store }) {
   const [loginErr, setLoginErr] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [nome, setNome] = useState("");
+  const [admNome, setAdmNome] = useState("");
   const [step, setStep] = useState("nome"); // "nome" | "pagamento" — fluxo de Sua Vaga
   const [rolling, setRolling] = useState(false);
   const rollingRef = useRef(false);
@@ -948,6 +968,22 @@ function App({ store }) {
     if (isOrganizer) await store.adminSetTeams(game.game_date, null).then((g) => g && setGame(g));
   }
 
+  // Organizador adiciona alguém que não paga pelo app (dinheiro na
+  // mão, PIX por fora etc.) — entra já confirmado, marcado como pago.
+  async function adminAdicionar() {
+    const n = admNome.trim();
+    if (!n || busy || !isOrganizer) return;
+    if (lotado) return say("Já não há vagas — nem como reserva, não sobrou lugar nenhum.");
+    const duplicado = jaExiste(n);
+    setBusy(true);
+    const row = await store.adminAddPlayer(game.game_date, n);
+    setBusy(false);
+    if (!row) return say("Não deu pra adicionar");
+    setAdmNome("");
+    setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
+    say(duplicado ? `Já tem um ${n} na lista — de olho pra não confundir` : `${row.name} na lista, já como pago`);
+  }
+
   function sortear() {
     if (!isOrganizer || titulares.length < 3 || rolling) return;
     rollingRef.current = true;
@@ -1147,6 +1183,15 @@ function App({ store }) {
                 </div>`
               : null}
           `}
+
+        ${isOrganizer && !lotado && html`
+          <div class="inline" style="margin-top:16px">
+            <input value=${admNome} placeholder="Adicionar alguém que não paga pelo app"
+              onInput=${(e) => setAdmNome(e.target.value)}
+              onKeyDown=${(e) => e.key === "Enter" && adminAdicionar()} />
+            <button class="btn btn-g btn-s" style="padding-inline:18px" disabled=${!admNome.trim() || busy}
+              onClick=${adminAdicionar}>Add</button>
+          </div>`}
 
         ${players.length > 0 && html`
           <button class="btn btn-2" style="margin-top:8px" onClick=${() => copiar(textoWhatsApp(), "Lista")}>
