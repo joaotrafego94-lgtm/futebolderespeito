@@ -947,23 +947,20 @@ function App({ store }) {
     return off;
   }, [store, game && game.game_date]);
 
-  // Se este aparelho já é mensalista (token guardado), confirma
-  // presença sozinho toda vez que abre o app — a pessoa nem precisa
-  // tocar em nada. Se a mensalidade venceu, simplesmente não confirma
-  // (o banner de renovar abaixo cuida do resto).
-  useEffect(() => {
-    if (!game || !meuMensalista) return;
-    let alive = true;
-    (async () => {
-      const row = await store.confirmPresenceByToken(game.game_date, meuMensalista.token);
-      if (!alive || !row) return;
-      const novo = { id: row.id, name: row.name, token: meuMensalista.token };
-      localStorage.setItem(ME_KEY, JSON.stringify(novo));
-      setMe(novo);
-      setPlayers((p) => (p.some((x) => x.id === row.id) ? p.map((x) => (x.id === row.id ? { ...x, ...row } : x)) : [...p, row]));
-    })();
-    return () => { alive = false; };
-  }, [store, game && game.game_date, meuMensalista && meuMensalista.token]);
+  // Mensalista NÃO entra sozinho — ele confirma que vai, um toque só,
+  // sem pagar de novo (usa o token já guardado). Assim quem não vai
+  // não fica marcado como presente, e a vaga fica livre pra outro.
+  async function confirmarPresencaMensal() {
+    if (!meuMensalista || busy) return;
+    setBusy(true);
+    const row = await store.confirmPresenceByToken(game.game_date, meuMensalista.token);
+    setBusy(false);
+    if (!row) return say("Não deu pra confirmar — sua mensalidade pode ter vencido");
+    const novo = { id: row.id, name: row.name, token: meuMensalista.token };
+    localStorage.setItem(ME_KEY, JSON.stringify(novo));
+    setMe(novo);
+    setPlayers((p) => (p.some((x) => x.id === row.id) ? p.map((x) => (x.id === row.id ? { ...x, ...row } : x)) : [...p, row]));
+  }
 
   async function fazerLogin(email, password) {
     setLoginBusy(true);
@@ -1146,24 +1143,17 @@ function App({ store }) {
     setBusy(true);
     const tok = uuid();
     const id = await store.claimMembership(n, tok);
-    if (!id) {
-      setBusy(false);
-      return say("Não deu pra vincular — fala com o organizador");
-    }
-    const row = await store.confirmPresenceByToken(game.game_date, tok);
     setBusy(false);
-    if (!row) return say("Vinculado, mas não deu pra confirmar presença dessa semana");
+    if (!id) return say("Não deu pra vincular — fala com o organizador");
+    // Só vincula o aparelho — não entra na lista sozinho. A pessoa
+    // confirma presença separado, um toque, quando quiser mesmo ir.
     const mensalista = { token: tok, name: n };
     localStorage.setItem(MEMBER_KEY, JSON.stringify(mensalista));
     setMeuMensalista(mensalista);
-    const novo = { id: row.id, name: row.name, token: tok };
-    localStorage.setItem(ME_KEY, JSON.stringify(novo));
-    setMe(novo);
     setNome("");
     setStep("nome");
-    setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
     store.members().then(setMembers);
-    say(`Vinculado! Bem-vindo, ${n}.`);
+    say(`Vinculado! Toca em "Vou jogar esse domingo" quando quiser confirmar.`);
   }
 
   // Botão "Pagar agora" numa vaga já pendente (ex.: alguém adicionado
@@ -1257,7 +1247,9 @@ function App({ store }) {
 
   async function abrirProximoDomingo() {
     if (!(await askConfirm("Abrir o jogo do próximo domingo? A lista dele começa vazia.", "Abrir"))) return;
-    const g = await store.adminOpenGame({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price, price_mensal: priceMensal });
+    // Valor por jogador é fixo (DEFAULTS.price) — não é mais editável,
+    // não faz sentido herdar um valor antigo do jogo anterior.
+    const g = await store.adminOpenGame({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price: DEFAULTS.price, price_mensal: priceMensal });
     if (g) { setGame(g); refresh(g.game_date); say("Próximo domingo aberto"); } else say("Não deu pra abrir");
   }
 
@@ -1420,6 +1412,16 @@ function App({ store }) {
                   : html`<span>${myRow.source === "mensalista" ? "Mensalista · " : ""}${souReserva ? `Reserva · ${myPaidIdx - slots + 1}º da fila · entra se alguém sair` : `Confirmado · ${myPaidIdx + 1}º · vaga garantida`}</span>`}
               </div>
             </div>`
+          : meuMembro && meuMembro.valid_until >= today()
+            ? html`<div>
+                <div class="card-t lbl" style="margin-bottom:6px">Sua vaga</div>
+                <div class="empty" style="padding:0 0 12px;text-align:left">
+                  Você é mensalista. Confirma que vai esse domingo pra entrar na lista — se não for, é só não confirmar.
+                </div>
+                <button class="btn btn-1" disabled=${busy} onClick=${confirmarPresencaMensal}>
+                  ${busy ? "Confirmando…" : "Vou jogar esse domingo"}
+                </button>
+              </div>`
           : lotado
             ? html`<div>
                 <div class="card-t lbl" style="margin-bottom:6px">Sua vaga</div>
@@ -1571,15 +1573,9 @@ function App({ store }) {
                 <input type="number" min="3" value=${slots} onChange=${(e) => salvarOrganizacao({ slots: Math.max(3, parseInt(e.target.value) || 3) })} />
               </div>
             </div>
-            <div class="grid2">
-              <div class="field">
-                <label class="lbl">Valor por jogador</label>
-                <input type="number" min="0" step="0.5" value=${price} onChange=${(e) => salvarOrganizacao({ price: Math.max(0, parseFloat(e.target.value) || 0) })} />
-              </div>
-              <div class="field">
-                <label class="lbl">Mensalidade</label>
-                <input type="number" min="0" step="0.5" value=${priceMensal} onChange=${(e) => salvarOrganizacao({ price_mensal: Math.max(0, parseFloat(e.target.value) || 0) })} />
-              </div>
+            <div class="field">
+              <label class="lbl">Mensalidade</label>
+              <input type="number" min="0" step="0.5" value=${priceMensal} onChange=${(e) => salvarOrganizacao({ price_mensal: Math.max(0, parseFloat(e.target.value) || 0) })} />
             </div>
             <button class="btn btn-g" style="margin-top:16px" onClick=${abrirProximoDomingo}>
               Abrir o próximo domingo

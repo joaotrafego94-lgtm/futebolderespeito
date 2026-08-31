@@ -14,7 +14,7 @@ Site estático, sem processo de build. Roda direto no navegador.
 - **A vaga só conta depois de paga.** Quem entra escreve o nome e paga na hora, pelo Stripe (cartão, MB Way, Klarna, Bancontact — o que estiver ativo na conta). Até o pagamento ser confirmado, a pessoa fica em **Aguardando pagamento**, sem ocupar vaga. Quem paga primeiro entra primeiro — mesmo que tenha escrito o nome depois de outra pessoa. Isso é de propósito: existe pra ninguém segurar a vaga sem pagar.
 - **Confirmação automática.** O Stripe avisa o app sozinho quando o pagamento é aprovado — ninguém precisa clicar em nada pra isso acontecer. O toggle manual (organizador) continua existindo como reserva, pra quando o Stripe falhar ou alguém pagar por fora excepcionalmente.
 - **Sem lista de espera.** Assim que as vagas esgotam, ninguém mais entra — nem pagando, nem sendo adicionado por um amigo. Só continua na lista quem já estava.
-- **Mensalista paga uma vez por mês, não toda semana.** Quem joga sempre pode virar mensalista em vez de avulso — depois disso, o app reconhece a pessoa sozinho todo domingo, sem passar pelo Stripe de novo. Ver a seção **Mensalistas** abaixo.
+- **Mensalista paga uma vez por mês, não toda semana.** Quem joga sempre pode virar mensalista em vez de avulso — depois disso, confirma presença com um toque todo domingo, sem passar pelo Stripe de novo. Ver a seção **Mensalistas** abaixo.
 - **Aviso de prazo.** Quem ainda não pagou vê um aviso vermelho com a contagem até sexta-feira (2 dias antes do jogo).
 - **Só o organizador remove alguém, sorteia os times e abre o jogo da semana.** Ver a seção **Organizador** abaixo.
 - **Uma mensagem pro WhatsApp.** O botão copia a lista já formatada, com confirmados, reservas, quem ainda está pagando, e os times.
@@ -58,7 +58,7 @@ A chave secreta nunca vai dentro do código das funções — só nesse separado
 
 **Testar antes de valer:** usa a chave `sk_test_...` primeiro, e paga com um [cartão de teste do Stripe](https://stripe.com/docs/testing) (nenhum dinheiro de verdade se mexe). Só depois de ver o pagamento confirmar sozinho no app, troca a chave pela `sk_live_...`.
 
-O valor cobrado vem sempre do campo **Valor por jogador** do jogo daquela semana — nunca fica preso a um número fixo. Ninguém no navegador consegue mudar esse valor: as funções sempre confirmam o preço direto no banco antes de cobrar ou de aceitar como pago.
+O valor do avulso é fixo (`DEFAULTS.price` em `index.html`) e o da mensalidade é o campo **Mensalidade** na seção Organização. Ninguém no navegador consegue mudar esse valor: as funções sempre confirmam o preço direto no banco antes de cobrar ou de aceitar como pago.
 
 ---
 
@@ -82,14 +82,14 @@ A `stripe-verify-session` (acima) só confirma quando a pessoa é redirecionada 
 
 ## Mensalistas
 
-Além de pagar avulso (um jogo de cada vez), dá pra virar mensalista: paga a mensalidade uma vez e entra automaticamente todo domingo, sem passar pelo Stripe de novo.
+Além de pagar avulso (um jogo de cada vez), dá pra virar mensalista: paga a mensalidade uma vez e confirma presença com um toque todo domingo, sem passar pelo Stripe de novo.
 
 **Como funciona:**
 
 - No card "Sua vaga", depois de escrever o nome, aparecem dois botões — **Avulso** (o de sempre) e **Virar mensalista**. Os dois vão pro Stripe; muda só o valor cobrado.
-- Depois de pagar como mensalista uma vez, o próprio celular guarda uma "senha" (token) que prova quem é a pessoa. Toda vez que o app abre, ele confirma a presença da semana sozinho, sem pedir nada — a pessoa só aparece na lista, já paga.
+- Depois de pagar como mensalista uma vez, o próprio celular guarda uma "senha" (token) que prova quem é a pessoa. Toda semana, o app mostra um botão "Vou jogar esse domingo" — um toque, sem pagar de novo, sem digitar nada. **Não entra sozinho**: quem não confirmar não ocupa vaga, pra não travar lugar de quem quer pagar avulso naquela semana.
 - **De propósito não reconhece só pelo nome.** Se reconhecesse, qualquer um que soubesse o nome de um mensalista digitaria e entraria de graça. Só o aparelho que pagou (ou que "reivindicou" o nome, ver abaixo) consegue confirmar presença.
-- **Quem paga por fora** (dinheiro na mão, PIX direto): o organizador adiciona o nome na lista de mensalistas, na seção **Organização**. A pessoa, na primeira vez que abrir o app, digita o próprio nome e toca em "Sou eu, confirmar neste aparelho" — só precisa fazer isso uma vez; depois disso funciona sozinho, igual quem pagou pelo Stripe.
+- **Quem paga por fora** (dinheiro na mão, PIX direto): o organizador adiciona o nome na lista de mensalistas, na seção **Organização**. A pessoa, na primeira vez que abrir o app, digita o próprio nome e toca em "Sou eu, confirmar neste aparelho" — só precisa fazer isso uma vez pra vincular o celular; depois disso confirma presença toda semana com um toque, igual quem pagou pelo Stripe.
 - **Renovação é manual.** Faltando 5 dias pra vencer, a pessoa vê um aviso vermelho com um botão de renovar — não é assinatura automática, ninguém é cobrado sem clicar.
 - **Trocou de celular?** No painel de Organização, o botão ⟲ ao lado do nome libera o vínculo, e a pessoa reivindica de novo no aparelho novo.
 - **Mensalista não soma na receita da semana** (card "de X€ · Y pagaram") — já pagou no mês, confirmar presença não é dinheiro novo entrando naquele domingo.
