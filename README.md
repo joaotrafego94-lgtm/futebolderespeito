@@ -14,6 +14,7 @@ Site estático, sem processo de build. Roda direto no navegador.
 - **A vaga só conta depois de paga.** Quem entra escreve o nome e paga na hora, pelo Stripe (cartão, MB Way, Klarna, Bancontact — o que estiver ativo na conta). Até o pagamento ser confirmado, a pessoa fica em **Aguardando pagamento**, sem ocupar vaga. Quem paga primeiro entra primeiro — mesmo que tenha escrito o nome depois de outra pessoa. Isso é de propósito: existe pra ninguém segurar a vaga sem pagar.
 - **Confirmação automática.** O Stripe avisa o app sozinho quando o pagamento é aprovado — ninguém precisa clicar em nada pra isso acontecer. O toggle manual (organizador) continua existindo como reserva, pra quando o Stripe falhar ou alguém pagar por fora excepcionalmente.
 - **Sem lista de espera.** Assim que as vagas esgotam, ninguém mais entra — nem pagando, nem sendo adicionado por um amigo. Só continua na lista quem já estava.
+- **Mensalista paga uma vez por mês, não toda semana.** Quem joga sempre pode virar mensalista em vez de avulso — depois disso, o app reconhece a pessoa sozinho todo domingo, sem passar pelo Stripe de novo. Ver a seção **Mensalistas** abaixo.
 - **Aviso de prazo.** Quem ainda não pagou vê um aviso vermelho com a contagem até sexta-feira (2 dias antes do jogo).
 - **Só o organizador remove alguém, sorteia os times e abre o jogo da semana.** Ver a seção **Organizador** abaixo.
 - **Uma mensagem pro WhatsApp.** O botão copia a lista já formatada, com confirmados, reservas, quem ainda está pagando, e os times.
@@ -79,6 +80,25 @@ A `stripe-verify-session` (acima) só confirma quando a pessoa é redirecionada 
 
 ---
 
+## Mensalistas
+
+Além de pagar avulso (um jogo de cada vez), dá pra virar mensalista: paga a mensalidade uma vez e entra automaticamente todo domingo, sem passar pelo Stripe de novo.
+
+**Como funciona:**
+
+- No card "Sua vaga", depois de escrever o nome, aparecem dois botões — **Avulso** (o de sempre) e **Virar mensalista**. Os dois vão pro Stripe; muda só o valor cobrado.
+- Depois de pagar como mensalista uma vez, o próprio celular guarda uma "senha" (token) que prova quem é a pessoa. Toda vez que o app abre, ele confirma a presença da semana sozinho, sem pedir nada — a pessoa só aparece na lista, já paga.
+- **De propósito não reconhece só pelo nome.** Se reconhecesse, qualquer um que soubesse o nome de um mensalista digitaria e entraria de graça. Só o aparelho que pagou (ou que "reivindicou" o nome, ver abaixo) consegue confirmar presença.
+- **Quem paga por fora** (dinheiro na mão, PIX direto): o organizador adiciona o nome na lista de mensalistas, na seção **Organização**. A pessoa, na primeira vez que abrir o app, digita o próprio nome e toca em "Sou eu, confirmar neste aparelho" — só precisa fazer isso uma vez; depois disso funciona sozinho, igual quem pagou pelo Stripe.
+- **Renovação é manual.** Faltando 5 dias pra vencer, a pessoa vê um aviso vermelho com um botão de renovar — não é assinatura automática, ninguém é cobrado sem clicar.
+- **Trocou de celular?** No painel de Organização, o botão ⟲ ao lado do nome libera o vínculo, e a pessoa reivindica de novo no aparelho novo.
+- **Mensalista não soma na receita da semana** (card "de X€ · Y pagaram") — já pagou no mês, confirmar presença não é dinheiro novo entrando naquele domingo.
+- O valor da mensalidade é o campo **Mensalidade** na seção Organização — editável, não fica preso a nenhum número fixo no código.
+
+Não precisa de Edge Function nova: a mesma `stripe-create-session`/`stripe-verify-session`/`stripe-webhook` da seção anterior já cuidam do pagamento avulso e do mensal — o `plan` mandado no pedido é o que muda o valor cobrado e o que acontece quando o Stripe confirma.
+
+---
+
 ## Organizador: conta com email e senha, só pros 2
 
 Jogadores nunca criam conta — só os organizadores, e são só eles que ganham a autorização extra (remover alguém, sortear os times, abrir o jogo da semana, e confirmar pagamento manualmente se o Stripe falhar). Quem tem a conta aparece identificado no topo do app enquanto estiver logado ("Organizador · fulano@email.com"), então dá pra saber quem mexeu no quê.
@@ -108,7 +128,7 @@ No topo do `<script type="module">` em `index.html`:
 | `DEFAULTS` | Hora, vagas e valor padrão de um jogo novo |
 | `KITS` | Nomes e cores dos três times do sorteio |
 
-Hora, vagas e valor do jogo atual mudam-se dentro do próprio app, na seção **Organização** (só o organizador vê os campos editáveis) — sem tocar no código.
+Hora, vagas, valor por jogo e mensalidade mudam-se dentro do próprio app, na seção **Organização** (só o organizador vê os campos editáveis) — sem tocar no código.
 
 ---
 

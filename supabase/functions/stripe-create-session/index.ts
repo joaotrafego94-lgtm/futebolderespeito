@@ -2,13 +2,16 @@
 //
 //   { player_id }              -- alguém já está pendente na lista
 //                                 (ex.: foi adicionado por um amigo sem
-//                                 celular) e quer pagar agora.
-//   { name, game_date, token } -- entrada nova. NÃO cria a vaga aqui --
-//                                 só depois que o Stripe confirmar que
-//                                 pagou (stripe-verify-session). Assim,
-//                                 quem desiste no meio do pagamento não
-//                                 deixa um nome fantasma em "Aguardando
-//                                 pagamento" pra sempre.
+//                                 celular) e quer pagar agora. Sempre
+//                                 avulso -- pagar a vaga de outra pessoa
+//                                 nunca vira mensalidade.
+//   { name, game_date, token, plan } -- entrada nova. NÃO cria a vaga
+//                                 aqui -- só depois que o Stripe
+//                                 confirmar que pagou (verify-session /
+//                                 webhook). plan é "avulso" (default) ou
+//                                 "mensal": muda só o valor cobrado; quem
+//                                 grava o resultado em members/players é
+//                                 sempre a função que confirma o pagamento.
 //
 // O preço vem SEMPRE do banco (nunca do navegador), pra ninguém
 // conseguir adulterar o valor mandando um número diferente na requisição.
@@ -45,7 +48,7 @@ Deno.serve(async (req) => {
     return json({ error: "Faltam secrets configurados nesta função" }, 500);
   }
 
-  let body: { player_id?: string; name?: string; game_date?: string; token?: string };
+  let body: { player_id?: string; name?: string; game_date?: string; token?: string; plan?: string };
   try {
     body = await req.json();
   } catch {
@@ -57,6 +60,7 @@ Deno.serve(async (req) => {
   let gameDate: string;
   let metadata: Record<string, string>;
   let description: string;
+  let plan: "avulso" | "mensal" = "avulso";
 
   if (body.player_id) {
     const playerRes = await fetch(
@@ -75,20 +79,21 @@ Deno.serve(async (req) => {
     if (!name || name.length > 60) return json({ error: "Nome inválido" }, 400);
     if (!body.game_date) return json({ error: "game_date é obrigatório" }, 400);
     if (!body.token) return json({ error: "token é obrigatório" }, 400);
+    plan = body.plan === "mensal" ? "mensal" : "avulso";
     gameDate = body.game_date;
-    metadata = { name, game_date: gameDate, token: body.token };
-    description = `Pelada de ${gameDate} — ${name}`;
+    metadata = { name, game_date: gameDate, token: body.token, plan };
+    description = `Pelada de ${gameDate} — ${name}${plan === "mensal" ? " (mensalista)" : ""}`;
   }
 
   const gameRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/games?game_date=eq.${gameDate}&select=game_date,price`,
+    `${SUPABASE_URL}/rest/v1/games?game_date=eq.${gameDate}&select=game_date,price,price_mensal`,
     { headers: dbHeaders }
   );
   const games = await gameRes.json();
   const game = games && games[0];
   if (!game) return json({ error: "Jogo não encontrado" }, 404);
 
-  const price = Number(game.price || 0);
+  const price = Number((plan === "mensal" ? game.price_mensal : game.price) || 0);
   if (price <= 0) return json({ error: "Esse jogo não tem valor definido" }, 400);
 
   const origin = req.headers.get("origin") || "https://futebolderespeito.vercel.app";
@@ -100,7 +105,7 @@ Deno.serve(async (req) => {
   params.set("line_items[0][quantity]", "1");
   params.set("line_items[0][price_data][currency]", "eur");
   params.set("line_items[0][price_data][unit_amount]", String(Math.round(price * 100)));
-  params.set("line_items[0][price_data][product_data][name]", "Futebol de Respeito");
+  params.set("line_items[0][price_data][product_data][name]", plan === "mensal" ? "Futebol de Respeito — mensalidade" : "Futebol de Respeito");
   params.set("line_items[0][price_data][product_data][description]", description);
 
   const stripeRes = await fetch("https://api.stripe.com/v1/checkout/sessions", {

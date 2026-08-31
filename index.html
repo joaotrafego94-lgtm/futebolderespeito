@@ -298,12 +298,16 @@ const CAMPO = "Ver o campo no mapa";
 // Stripe (ver supabase/functions/). SUPABASE_URL já vem de cima.
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
 
-const DEFAULTS = { kickoff: "10:00", slots: 15, price: 5 };
+const DEFAULTS = { kickoff: "10:00", slots: 15, price: 5, price_mensal: 15 };
 const ME_KEY = "fdr:me";
 const LOCAL_KEY = "fdr:local";
 // Guarda nome+token enquanto a pessoa está no Stripe, já que a
 // navegação de ida e volta perde qualquer estado do React.
 const STRIPE_PENDING_KEY = "fdr:stripe_pending";
+// Token de mensalista — ao contrário de ME_KEY (que é por jogo, reseta
+// toda semana), este é permanente: prova, todo domingo, que é mesmo
+// essa pessoa sem precisar digitar nome nem pagar de novo.
+const MEMBER_KEY = "fdr:mensalista";
 
 const configured = SUPABASE_URL !== "COLOCAR_AQUI" && SUPABASE_ANON_KEY !== "COLOCAR_AQUI";
 
@@ -349,6 +353,14 @@ function countdown(d) {
 
 const eur = (n) => `${Number(n || 0).toFixed(2).replace(".", ",").replace(",00", "")}€`;
 const uuid = () => crypto.randomUUID();
+
+// Soma 1 mês a uma data "YYYY-MM-DD". Usado pra renovar mensalidade —
+// mesma lógica das Edge Functions (supabase/functions/stripe-*).
+function addOneMonth(isoDate) {
+  const d = new Date(isoDate + "T00:00:00Z");
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 // Sexta-feira antes do jogo (que é sempre domingo) — prazo informal
 // pra pagar antes que o organizador possa liberar a vaga pra outra
@@ -429,6 +441,54 @@ function localStore() {
       write(s);
       return true;
     },
+    // members não reseta junto com o jogo — mensalidade sobrevive à
+    // troca de domingo, só players reseta.
+    async members() {
+      return read().members || [];
+    },
+    async confirmPresenceByToken(date, token) {
+      const s = read();
+      const m = (s.members || []).find((x) => x.token === token);
+      if (!m || m.valid_until < today()) return null;
+      const key = m.name.trim().toLowerCase();
+      let row = (s.players || []).find((p) => p.name.trim().toLowerCase() === key);
+      if (!row) {
+        row = { id: `l${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name: m.name, paid: true, paid_at: new Date().toISOString(), source: "mensalista" };
+        s.players = [...(s.players || []), row];
+      } else if (!row.paid) {
+        row = { ...row, paid: true, paid_at: new Date().toISOString(), source: "mensalista" };
+        s.players = s.players.map((p) => (p.id === row.id ? row : p));
+      }
+      write(s);
+      return row;
+    },
+    async claimMembership(name, token) {
+      const s = read();
+      const key = name.trim().toLowerCase();
+      const m = (s.members || []).find((x) => x.name.trim().toLowerCase() === key && !x.token);
+      if (!m) return null;
+      s.members = s.members.map((x) => (x.id === m.id ? { ...x, token } : x));
+      write(s);
+      return m.id;
+    },
+    // Modo local não tem Stripe de verdade — "virar mensalista" cria
+    // ou renova o member direto, sem pagamento nenhum (igual todo o
+    // resto do modo local, que já não tem gate de pagamento real).
+    async becomeMemberLocally(name, token) {
+      const s = read();
+      const key = name.trim().toLowerCase();
+      let m = (s.members || []).find((x) => x.name.trim().toLowerCase() === key);
+      const base = m && m.valid_until > today() ? m.valid_until : today();
+      const valid_until = addOneMonth(base);
+      if (m) {
+        s.members = s.members.map((x) => (x.id === m.id ? { ...x, token, valid_until } : x));
+      } else {
+        m = { id: `m${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name, token, valid_until };
+        s.members = [...(s.members || []), m];
+      }
+      write(s);
+      return m;
+    },
     subscribe() { return () => {}; },
     // No modo local (sem Supabase) é um telemóvel só: quem abre já
     // controla tudo, não existe conceito de organizador nem de login.
@@ -448,6 +508,37 @@ function localStore() {
       s.players = [...(s.players || []), row];
       write(s);
       return row;
+    },
+    // Mensalista cadastrado pelo organizador (pagou por fora) — sem
+    // token ainda, a própria pessoa reivindica depois (claimMembership).
+    async adminAddMember(name, validUntil) {
+      const s = read();
+      const key = name.trim().toLowerCase();
+      if ((s.members || []).some((m) => m.name.trim().toLowerCase() === key)) return null;
+      const row = { id: `m${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name, token: null, valid_until: validUntil || today() };
+      s.members = [...(s.members || []), row];
+      write(s);
+      return row;
+    },
+    async adminRenewMember(id, currentValidUntil) {
+      const s = read();
+      const base = currentValidUntil > today() ? currentValidUntil : today();
+      const valid_until = addOneMonth(base);
+      s.members = (s.members || []).map((m) => (m.id === id ? { ...m, valid_until } : m));
+      write(s);
+      return valid_until;
+    },
+    async adminRemoveMember(id) {
+      const s = read();
+      s.members = (s.members || []).filter((m) => m.id !== id);
+      write(s);
+      return true;
+    },
+    async adminResetMemberToken(id) {
+      const s = read();
+      s.members = (s.members || []).map((m) => (m.id === id ? { ...m, token: null } : m));
+      write(s);
+      return true;
     },
     async adminOpenGame(patch) {
       const s = read();
@@ -513,7 +604,27 @@ async function remoteStore() {
       const { data, error } = await sb.from("players").select("*").eq("game_date", date)
         .order("created_at", { ascending: true });
       if (error) { console.error(error); return []; }
-      return data.map((r) => ({ id: r.id, name: r.name, paid: r.paid, paid_at: r.paid_at }));
+      return data.map((r) => ({ id: r.id, name: r.name, paid: r.paid, paid_at: r.paid_at, source: r.source }));
+    },
+    async members() {
+      const { data, error } = await sb.from("members").select("*");
+      if (error) { console.error(error); return []; }
+      return data;
+    },
+    // Chamada toda vez que o app abre, se o celular já tem um token de
+    // mensalista guardado — confirma presença na semana sem pagar de
+    // novo. Null se a mensalidade não existir mais ou tiver vencido.
+    async confirmPresenceByToken(date, token) {
+      const { data, error } = await sb.rpc("confirm_presence_by_token", { p_date: date, p_token: token });
+      if (error) return null;
+      return data;
+    },
+    // Reivindica, uma única vez, um mensalista cadastrado pelo
+    // organizador (pagou por fora, ainda sem token vinculado).
+    async claimMembership(name, token) {
+      const { data, error } = await sb.rpc("claim_membership", { p_name: name, p_token: token });
+      if (error) { console.error(error); return null; }
+      return data;
     },
     // Sem conta: entra pela função join_game, que dá um token — é esse
     // token que depois prova, sem senha nenhuma, que o próprio celular
@@ -532,6 +643,7 @@ async function remoteStore() {
       const ch = sb.channel(`fdr-${date}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "players", filter: `game_date=eq.${date}` }, onChange)
         .on("postgres_changes", { event: "*", schema: "public", table: "games" }, onChange)
+        .on("postgres_changes", { event: "*", schema: "public", table: "members" }, onChange)
         .subscribe();
       return () => sb.removeChannel(ch);
     },
@@ -559,12 +671,40 @@ async function remoteStore() {
       if (error) { console.error(error); return null; }
       return { id: data.id, name: data.name, paid: data.paid, paid_at: data.paid_at };
     },
+    // Mensalista cadastrado pelo organizador (pagou por fora) — sem
+    // token ainda, a própria pessoa reivindica no celular dela depois
+    // (claimMembership). Só funciona logado (RLS).
+    async adminAddMember(name, validUntil) {
+      const { data, error } = await sb.from("members")
+        .insert({ name, valid_until: validUntil || today() })
+        .select().single();
+      if (error) { console.error(error); return null; }
+      return data;
+    },
+    async adminRenewMember(id, currentValidUntil) {
+      const base = currentValidUntil > today() ? currentValidUntil : today();
+      const valid_until = addOneMonth(base);
+      const { error } = await sb.from("members").update({ valid_until, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) { console.error(error); return null; }
+      return valid_until;
+    },
+    async adminRemoveMember(id) {
+      const { error } = await sb.from("members").delete().eq("id", id);
+      if (error) { console.error(error); return false; }
+      return true;
+    },
+    async adminResetMemberToken(id) {
+      const { error } = await sb.from("members").update({ token: null, updated_at: new Date().toISOString() }).eq("id", id);
+      if (error) { console.error(error); return false; }
+      return true;
+    },
     async adminOpenGame(patch) {
       const row = {
         game_date: patch.game_date || nextSunday(),
         kickoff: patch.kickoff || DEFAULTS.kickoff,
         slots: patch.slots || DEFAULTS.slots,
         price: patch.price ?? DEFAULTS.price,
+        price_mensal: patch.price_mensal ?? DEFAULTS.price_mensal,
         teams: null,
       };
       const { data, error } = await sb.from("games").upsert(row).select().single();
@@ -673,13 +813,16 @@ function ConfirmModal({ message, confirmLabel, onYes, onNo }) {
 function App({ store }) {
   const [game, setGame] = useState(undefined); // undefined = carregando, null = sem jogo aberto
   const [players, setPlayers] = useState([]);
+  const [members, setMembers] = useState([]);
   const [me, setMe] = useState(() => { try { return JSON.parse(localStorage.getItem(ME_KEY)); } catch { return null; } });
+  const [meuMensalista, setMeuMensalista] = useState(() => { try { return JSON.parse(localStorage.getItem(MEMBER_KEY)); } catch { return null; } });
   const [user, setUser] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginErr, setLoginErr] = useState("");
   const [loginBusy, setLoginBusy] = useState(false);
   const [nome, setNome] = useState("");
   const [admNome, setAdmNome] = useState("");
+  const [novoMensalista, setNovoMensalista] = useState("");
   const [step, setStep] = useState("nome"); // "nome" | "pagamento" — fluxo de Sua Vaga
   const [rolling, setRolling] = useState(false);
   const rollingRef = useRef(false);
@@ -720,6 +863,8 @@ function App({ store }) {
         const rows = await store.players(g.game_date);
         if (alive) setPlayers(rows);
       }
+      const ms = await store.members();
+      if (alive) setMembers(ms);
     })();
     return () => { alive = false; };
   }, [store]);
@@ -754,7 +899,7 @@ function App({ store }) {
         });
         const data = await resp.json();
         if (data.ok) {
-          say("Pagamento confirmado! Você já está na lista.");
+          say(data.plan === "mensal" ? "Mensalidade confirmada! Você já está na lista." : "Pagamento confirmado! Você já está na lista.");
           // Se foi este aparelho que iniciou uma entrada nova (não um
           // "Pagar agora" na vaga de outra pessoa), reconhece a vaga
           // como "sua vaga" aqui.
@@ -764,6 +909,12 @@ function App({ store }) {
             const novo = { id: data.player_id, name: pendente.name, token: pendente.token };
             localStorage.setItem(ME_KEY, JSON.stringify(novo));
             setMe(novo);
+            if (pendente.plan === "mensal") {
+              const mensalista = { token: pendente.token, name: pendente.name };
+              localStorage.setItem(MEMBER_KEY, JSON.stringify(mensalista));
+              setMeuMensalista(mensalista);
+              store.members().then(setMembers);
+            }
           }
           localStorage.removeItem(STRIPE_PENDING_KEY);
         } else {
@@ -790,9 +941,29 @@ function App({ store }) {
         const rows = await store.players(g.game_date);
         setPlayers(rows);
       }
+      const ms = await store.members();
+      setMembers(ms);
     });
     return off;
   }, [store, game && game.game_date]);
+
+  // Se este aparelho já é mensalista (token guardado), confirma
+  // presença sozinho toda vez que abre o app — a pessoa nem precisa
+  // tocar em nada. Se a mensalidade venceu, simplesmente não confirma
+  // (o banner de renovar abaixo cuida do resto).
+  useEffect(() => {
+    if (!game || !meuMensalista) return;
+    let alive = true;
+    (async () => {
+      const row = await store.confirmPresenceByToken(game.game_date, meuMensalista.token);
+      if (!alive || !row) return;
+      const novo = { id: row.id, name: row.name, token: meuMensalista.token };
+      localStorage.setItem(ME_KEY, JSON.stringify(novo));
+      setMe(novo);
+      setPlayers((p) => (p.some((x) => x.id === row.id) ? p.map((x) => (x.id === row.id ? { ...x, ...row } : x)) : [...p, row]));
+    })();
+    return () => { alive = false; };
+  }, [store, game && game.game_date, meuMensalista && meuMensalista.token]);
 
   async function fazerLogin(email, password) {
     setLoginBusy(true);
@@ -854,6 +1025,7 @@ function App({ store }) {
 
   const slots = game.slots || DEFAULTS.slots;
   const price = Number(game.price ?? DEFAULTS.price);
+  const priceMensal = Number(game.price_mensal ?? DEFAULTS.price_mensal);
   // Quem paga primeiro entra primeiro — por isso pagos ordena por
   // paid_at, não pela ordem em que os nomes chegaram (created_at).
   // Um simples .filter() preservaria a ordem de chegada por dentro,
@@ -863,6 +1035,10 @@ function App({ store }) {
   const titulares = pagos.slice(0, slots);
   const reservas = pagos.slice(slots);
   const pct = players.length ? Math.round((pagos.length / players.length) * 100) : 0;
+  // Dinheiro arrecadado NESTA semana — mensalista não soma, já pagou
+  // no mês, confirmar presença de graça não gera receita da semana.
+  const avulsosPagos = pagos.filter((p) => p.source !== "mensalista").length;
+  const avulsosTotal = players.filter((p) => p.source !== "mensalista").length;
   const myRow = me ? players.find((p) => p.id === me.id) : null;
   const myPaidIdx = myRow && myRow.paid ? pagos.findIndex((p) => p.id === me.id) : -1;
   const myPendingIdx = myRow && !myRow.paid ? pendentes.findIndex((p) => p.id === me.id) : -1;
@@ -876,18 +1052,56 @@ function App({ store }) {
     return players.some((p) => p.name.trim().toLowerCase() === n.toLowerCase());
   }
 
+  // Mensalista ativo com esse nome (já com aparelho vinculado) — se
+  // bater, a pessoa pula direto pra "confirmar presença", sem pagar.
+  function mensalistaAtivo(n) {
+    const key = n.trim().toLowerCase();
+    return members.find((m) => m.token && m.name.trim().toLowerCase() === key && m.valid_until >= today());
+  }
+  // Mensalista cadastrado pelo organizador (pagou por fora), ainda sem
+  // aparelho vinculado — a pessoa pode reivindicar digitando o nome.
+  function mensalistaParaReivindicar(n) {
+    const key = n.trim().toLowerCase();
+    return members.find((m) => !m.token && m.name.trim().toLowerCase() === key);
+  }
+  const meuMembro = meuMensalista ? members.find((m) => m.token === meuMensalista.token) : null;
+  const mensalidadeVencendo = meuMembro && daysAway(meuMembro.valid_until) <= 5;
+
   // Sem Supabase (modo local, um telemóvel só): não há pagamento de
   // verdade, então entra direto, como sempre — o organizador (o
   // próprio dono do telemóvel) confirma manualmente.
-  async function pagarComStripe() {
-    const n = nome.trim();
+  // overrides.token existe só na renovação (reaproveita o token já
+  // vinculado, pra somar 1 mês na mesma mensalidade em vez de criar
+  // outra) — no primeiro pagamento como mensalista, nasce um token novo.
+  async function pagarComStripe(plan = "avulso", overrides = {}) {
+    const n = (overrides.name || nome).trim();
     if (!n || busy || stripeBusy) return;
-    if (lotado) return say("Já não há vagas — nem como reserva, não sobrou lugar nenhum.");
+    // Lotado bloqueia entrada nova avulsa — mensalista já pagou o mês,
+    // continua conseguindo confirmar (entra como reserva se passar das
+    // vagas, igual sempre funcionou pra quem paga primeiro).
+    if (plan === "avulso" && lotado) return say("Já não há vagas — nem como reserva, não sobrou lugar nenhum.");
 
     if (!store.live) {
-      const duplicado = jaExiste(n);
       setBusy(true);
-      const tok = uuid();
+      const tok = overrides.token || uuid();
+      if (plan === "mensal") {
+        await store.becomeMemberLocally(n, tok);
+        const row = await store.confirmPresenceByToken(game.game_date, tok);
+        setBusy(false);
+        if (!row) return say("Não deu pra virar mensalista");
+        const mensalista = { token: tok, name: n };
+        localStorage.setItem(MEMBER_KEY, JSON.stringify(mensalista));
+        setMeuMensalista(mensalista);
+        const novo = { id: row.id, name: row.name, token: tok };
+        localStorage.setItem(ME_KEY, JSON.stringify(novo));
+        setMe(novo);
+        setNome("");
+        setStep("nome");
+        setPlayers((p) => (p.some((x) => x.id === row.id) ? p.map((x) => (x.id === row.id ? row : x)) : [...p, row]));
+        store.members().then(setMembers);
+        return say(overrides.token ? "Mensalidade renovada!" : `${n} agora é mensalista!`);
+      }
+      const duplicado = jaExiste(n);
       const row = await store.addPlayer(game.game_date, n, tok);
       setBusy(false);
       if (!row) return say("Não deu pra entrar");
@@ -900,17 +1114,18 @@ function App({ store }) {
       return say(duplicado ? `Já tem um ${n} na lista — de olho pra não confundir` : "Falta o organizador confirmar seu pagamento");
     }
 
-    // Com Supabase: a vaga NÃO é criada agora. Só nasce depois que o
-    // Stripe confirmar o pagamento (stripe-verify-session) — quem
-    // desiste no meio do caminho não deixa nome nenhum na lista.
+    // Com Supabase: a vaga NÃO é criada agora (avulso), nem o mês
+    // contado (mensal) — só depois que o Stripe confirmar o pagamento
+    // (stripe-verify-session / stripe-webhook). Quem desiste no meio do
+    // caminho não deixa nome nenhum na lista, nem mensalidade cobrada.
     setStripeBusy(true);
-    const tok = uuid();
+    const tok = overrides.token || uuid();
     try {
-      localStorage.setItem(STRIPE_PENDING_KEY, JSON.stringify({ name: n, token: tok }));
+      localStorage.setItem(STRIPE_PENDING_KEY, JSON.stringify({ name: n, token: tok, plan }));
       const resp = await fetch(`${EDGE_BASE}/stripe-create-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
-        body: JSON.stringify({ name: n, game_date: game.game_date, token: tok }),
+        body: JSON.stringify({ name: n, game_date: game.game_date, token: tok, plan }),
       });
       const data = await resp.json();
       if (!resp.ok || !data.url) { setStripeBusy(false); return say(data.error || "Não deu pra abrir o pagamento"); }
@@ -920,6 +1135,35 @@ function App({ store }) {
       setStripeBusy(false);
       say("Não deu pra abrir o pagamento");
     }
+  }
+
+  // Só pra mensalista cadastrado pelo organizador (pagou por fora,
+  // sem token ainda) — a pessoa digita o próprio nome uma vez pra
+  // vincular este aparelho, sem passar pelo Stripe.
+  async function reivindicarMensalidade() {
+    const n = nome.trim();
+    if (!n || busy) return;
+    setBusy(true);
+    const tok = uuid();
+    const id = await store.claimMembership(n, tok);
+    if (!id) {
+      setBusy(false);
+      return say("Não deu pra vincular — fala com o organizador");
+    }
+    const row = await store.confirmPresenceByToken(game.game_date, tok);
+    setBusy(false);
+    if (!row) return say("Vinculado, mas não deu pra confirmar presença dessa semana");
+    const mensalista = { token: tok, name: n };
+    localStorage.setItem(MEMBER_KEY, JSON.stringify(mensalista));
+    setMeuMensalista(mensalista);
+    const novo = { id: row.id, name: row.name, token: tok };
+    localStorage.setItem(ME_KEY, JSON.stringify(novo));
+    setMe(novo);
+    setNome("");
+    setStep("nome");
+    setPlayers((p) => (p.some((x) => x.id === row.id) ? p : [...p, row]));
+    store.members().then(setMembers);
+    say(`Vinculado! Bem-vindo, ${n}.`);
   }
 
   // Botão "Pagar agora" numa vaga já pendente (ex.: alguém adicionado
@@ -1013,8 +1257,40 @@ function App({ store }) {
 
   async function abrirProximoDomingo() {
     if (!(await askConfirm("Abrir o jogo do próximo domingo? A lista dele começa vazia.", "Abrir"))) return;
-    const g = await store.adminOpenGame({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price });
+    const g = await store.adminOpenGame({ game_date: nextSunday(game.game_date), kickoff: game.kickoff, slots, price, price_mensal: priceMensal });
     if (g) { setGame(g); refresh(g.game_date); say("Próximo domingo aberto"); } else say("Não deu pra abrir");
+  }
+
+  async function adicionarMensalista(n) {
+    if (!n.trim() || busy) return;
+    setBusy(true);
+    const row = await store.adminAddMember(n.trim(), addOneMonth(today()));
+    setBusy(false);
+    if (!row) return say("Já existe um mensalista com esse nome");
+    setMembers((m) => [...m, row]);
+    setNovoMensalista("");
+    say(`${n.trim()} adicionado como mensalista — falta só a pessoa vincular o aparelho dela`);
+  }
+
+  async function renovarMensalista(m) {
+    const valid_until = await store.adminRenewMember(m.id, m.valid_until);
+    if (!valid_until) return say("Não deu pra renovar");
+    setMembers((l) => l.map((x) => (x.id === m.id ? { ...x, valid_until } : x)));
+    say(`Renovado até ${fmt(valid_until, { day: "numeric", month: "short" })}`);
+  }
+
+  async function removerMensalista(m) {
+    if (!(await askConfirm(`Remover ${m.name} dos mensalistas?`, "Remover"))) return;
+    const ok = await store.adminRemoveMember(m.id);
+    if (!ok) return say("Não consegui remover");
+    setMembers((l) => l.filter((x) => x.id !== m.id));
+  }
+
+  async function liberarMensalista(m) {
+    const ok = await store.adminResetMemberToken(m.id);
+    if (!ok) return say("Não deu pra liberar");
+    setMembers((l) => l.map((x) => (x.id === m.id ? { ...x, token: null } : x)));
+    say(`${m.name} liberado pra vincular outro aparelho`);
   }
 
   async function copiar(txt, o) {
@@ -1034,11 +1310,11 @@ function App({ store }) {
     L.push(MAPS_LINK);
     L.push("");
     L.push(`*Confirmados (${titulares.length}/${slots})*`);
-    titulares.forEach((p, i) => L.push(`${i + 1}. ${p.name} ${p.paid ? "✅" : "⏳"}`));
+    titulares.forEach((p, i) => L.push(`${i + 1}. ${p.name}${p.source === "mensalista" ? " (mensalista)" : ""} ${p.paid ? "✅" : "⏳"}`));
     if (reservas.length) {
       L.push("");
       L.push("*Reservas*");
-      reservas.forEach((p, i) => L.push(`${i + 1}. ${p.name} ${p.paid ? "✅" : "⏳"}`));
+      reservas.forEach((p, i) => L.push(`${i + 1}. ${p.name}${p.source === "mensalista" ? " (mensalista)" : ""} ${p.paid ? "✅" : "⏳"}`));
     }
     if (pendentes.length) {
       L.push("");
@@ -1063,7 +1339,7 @@ function App({ store }) {
     return html`
     <div class=${`row${souEu ? " mine" : ""}${sub ? " sub" : ""}`} key=${p.id}>
       <span class="num">${i + 1}</span>
-      <span class="nm">${p.name}${souEu ? html`<i>VOCÊ</i>` : null}</span>
+      <span class="nm">${p.name}${souEu ? html`<i>VOCÊ</i>` : null}${p.source === "mensalista" ? html`<i style="color:var(--gold-deep)">MENSALISTA</i>` : null}</span>
       ${!p.paid && store.live
         ? html`<button class="tag tag-no" disabled=${stripeBusy} onClick=${() => pagarPendente(p)}>Pagar agora</button>`
         : isOrganizer
@@ -1115,6 +1391,24 @@ function App({ store }) {
           <div class="pa-body">${avisoPagamento(game.game_date).corpo}</div>
         </div>`}
 
+      ${mensalidadeVencendo && (() => {
+        const n = daysAway(meuMembro.valid_until);
+        const quando = n < 0 ? "vencida" : n === 0 ? "vence hoje" : n === 1 ? "vence amanhã" : `vence em ${n} dias`;
+        return html`
+          <div class="pay-alert">
+            <div class="pa-head">⚠️ Mensalidade ${n < 0 ? "vencida" : "vencendo"}</div>
+            <div class="pa-body">
+              ${n < 0
+                ? "Sua mensalidade venceu. Renove pra continuar entrando sem pagar toda semana."
+                : `Sua mensalidade ${quando}. Renove pra não perder o mês.`}
+            </div>
+            <button class="btn btn-1 btn-s" style="margin-top:10px" disabled=${busy || stripeBusy}
+              onClick=${() => pagarComStripe("mensal", { name: meuMembro.name, token: meuMembro.token })}>
+              ${busy || stripeBusy ? "Abrindo…" : `Renovar · ${eur(priceMensal)}`}
+            </button>
+          </div>`;
+      })()}
+
       <div class="card">
         ${myRow
           ? html`<div class="me-in">
@@ -1123,7 +1417,7 @@ function App({ store }) {
                 <b>${myRow.name}</b>
                 ${!myRow.paid
                   ? html`<span>Aguardando pagamento · ${myPendingIdx + 1}º na fila pra pagar<br />Faltam ${eur(price)}. Sua vaga só conta depois do pagamento confirmado.</span>`
-                  : html`<span>${souReserva ? `Reserva · ${myPaidIdx - slots + 1}º da fila · entra se alguém sair` : `Confirmado · ${myPaidIdx + 1}º · vaga garantida`}</span>`}
+                  : html`<span>${myRow.source === "mensalista" ? "Mensalista · " : ""}${souReserva ? `Reserva · ${myPaidIdx - slots + 1}º da fila · entra se alguém sair` : `Confirmado · ${myPaidIdx + 1}º · vaga garantida`}</span>`}
               </div>
             </div>`
           : lotado
@@ -1144,20 +1438,52 @@ function App({ store }) {
                     onClick=${() => setStep("pagamento")}>Continuar</button>
                 </div>
               </div>`
-            : html`<div>
-                <div class="card-t lbl" style="margin-bottom:4px">Pagamento de ${nome.trim()}</div>
-                <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
-                  ${store.live
-                    ? `${eur(price)} pra garantir a vaga. Ao clicar você vai pagar — a vaga vira real assim que o pagamento for aprovado, sem precisar avisar ninguém.`
-                    : `${eur(price)} pra garantir a vaga. Sem o Supabase ligado, quem organiza confirma manualmente.`}
-                </div>
-                <div class="inline">
-                  <button class="btn btn-g btn-s" onClick=${() => setStep("nome")}>Voltar</button>
-                  <button class="btn btn-1" disabled=${busy || stripeBusy} onClick=${pagarComStripe}>
-                    ${busy || stripeBusy ? "Abrindo…" : store.live ? `Pagar ${eur(price)}` : "Entrar na lista"}
-                  </button>
-                </div>
-              </div>`}
+            : (() => {
+                const reivindicar = mensalistaParaReivindicar(nome);
+                const jaMensalista = !reivindicar && mensalistaAtivo(nome);
+                if (reivindicar) {
+                  return html`<div>
+                    <div class="card-t lbl" style="margin-bottom:4px">${nome.trim()} é mensalista</div>
+                    <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
+                      Alguém já pagou essa mensalidade por fora. Toca no botão pra vincular este aparelho — só precisa fazer isso uma vez.
+                    </div>
+                    <div class="inline">
+                      <button class="btn btn-g btn-s" onClick=${() => setStep("nome")}>Voltar</button>
+                      <button class="btn btn-1" disabled=${busy} onClick=${reivindicarMensalidade}>
+                        ${busy ? "Vinculando…" : "Sou eu, confirmar neste aparelho"}
+                      </button>
+                    </div>
+                  </div>`;
+                }
+                if (jaMensalista) {
+                  return html`<div>
+                    <div class="card-t lbl" style="margin-bottom:4px">${nome.trim()} já é mensalista</div>
+                    <div class="empty" style="padding:0;text-align:left">
+                      Essa mensalidade já está vinculada a outro aparelho. Se for você, abre o app no celular que você usou pra virar mensalista — ou pede pro organizador liberar de novo.
+                    </div>
+                    <div class="inline" style="margin-top:12px">
+                      <button class="btn btn-g btn-s" onClick=${() => setStep("nome")}>Voltar</button>
+                    </div>
+                  </div>`;
+                }
+                return html`<div>
+                  <div class="card-t lbl" style="margin-bottom:4px">${nome.trim()}</div>
+                  <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
+                    ${store.live
+                      ? `Paga a semana ou vira mensalista. A vaga vira real assim que o pagamento for aprovado, sem precisar avisar ninguém.`
+                      : `Sem o Supabase ligado, quem organiza confirma manualmente.`}
+                  </div>
+                  <div class="inline" style="flex-wrap:wrap">
+                    <button class="btn btn-g btn-s" onClick=${() => setStep("nome")}>Voltar</button>
+                    <button class="btn btn-2" disabled=${busy || stripeBusy} onClick=${() => pagarComStripe("avulso")}>
+                      ${busy || stripeBusy ? "Abrindo…" : store.live ? `Avulso · ${eur(price)}` : "Entrar na lista"}
+                    </button>
+                    <button class="btn btn-1" disabled=${busy || stripeBusy} onClick=${() => pagarComStripe("mensal")}>
+                      ${busy || stripeBusy ? "Abrindo…" : store.live ? `Virar mensalista · ${eur(priceMensal)}/mês` : "Virar mensalista"}
+                    </button>
+                  </div>
+                </div>`;
+              })()}
       </div>
 
       <div class="card">
@@ -1202,10 +1528,10 @@ function App({ store }) {
       <div class="card">
         <div class="money">
           <div>
-            <div class="big disp">${eur(pagos.length * price)}</div>
-            <div class="cap">de ${eur(players.length * price)} · ${eur(price)} cada</div>
+            <div class="big disp">${eur(avulsosPagos * price)}</div>
+            <div class="cap">de ${eur(avulsosTotal * price)} · ${eur(price)} cada</div>
           </div>
-          <div class="side"><b>${pagos.length}/${players.length}</b>pagaram</div>
+          <div class="side"><b>${avulsosPagos}/${avulsosTotal}</b>pagaram</div>
         </div>
         <div class="bar"><i style=${`width:${pct}%`}></i></div>
       </div>
@@ -1245,13 +1571,38 @@ function App({ store }) {
                 <input type="number" min="3" value=${slots} onChange=${(e) => salvarOrganizacao({ slots: Math.max(3, parseInt(e.target.value) || 3) })} />
               </div>
             </div>
-            <div class="field">
-              <label class="lbl">Valor por jogador</label>
-              <input type="number" min="0" step="0.5" value=${price} onChange=${(e) => salvarOrganizacao({ price: Math.max(0, parseFloat(e.target.value) || 0) })} />
+            <div class="grid2">
+              <div class="field">
+                <label class="lbl">Valor por jogador</label>
+                <input type="number" min="0" step="0.5" value=${price} onChange=${(e) => salvarOrganizacao({ price: Math.max(0, parseFloat(e.target.value) || 0) })} />
+              </div>
+              <div class="field">
+                <label class="lbl">Mensalidade</label>
+                <input type="number" min="0" step="0.5" value=${priceMensal} onChange=${(e) => salvarOrganizacao({ price_mensal: Math.max(0, parseFloat(e.target.value) || 0) })} />
+              </div>
             </div>
             <button class="btn btn-g" style="margin-top:16px" onClick=${abrirProximoDomingo}>
               Abrir o próximo domingo
             </button>
+
+            <div class="card-t lbl" style="margin-top:22px;margin-bottom:10px">Mensalistas</div>
+            ${members.length === 0
+              ? html`<div class="empty" style="padding:0 0 12px">Ninguém ainda.</div>`
+              : members.map((m) => html`
+                  <div class="row sub" key=${m.id}>
+                    <span class="nm">${m.name}<i style=${`color:${m.valid_until >= today() ? "var(--gold-deep)" : "var(--blue)"}`}>${m.valid_until >= today() ? `ATÉ ${fmt(m.valid_until, { day: "numeric", month: "short" })}` : "VENCIDO"}</i></span>
+                    ${!m.token && html`<span class="tag tag-no">Sem aparelho</span>`}
+                    <button class="x ok" onClick=${() => renovarMensalista(m)} aria-label="Renovar 1 mês" title="Renovar 1 mês">↻</button>
+                    ${m.token && html`<button class="x" onClick=${() => liberarMensalista(m)} aria-label="Liberar aparelho" title="Liberar aparelho (trocou de celular)">⟲</button>`}
+                    <button class="x" onClick=${() => removerMensalista(m)} aria-label="Remover mensalista">✕</button>
+                  </div>`)}
+            <div class="inline" style="margin-top:12px">
+              <input value=${novoMensalista} placeholder="Nome de quem pagou por fora"
+                onInput=${(e) => setNovoMensalista(e.target.value)}
+                onKeyDown=${(e) => e.key === "Enter" && adicionarMensalista(novoMensalista)} />
+              <button class="btn btn-g btn-s" style="padding-inline:18px" disabled=${!novoMensalista.trim() || busy}
+                onClick=${() => adicionarMensalista(novoMensalista)}>Add</button>
+            </div>
           </details>`
         : html`<div class="card">
             <div class="card-t lbl" style="margin-bottom:12px">Organização</div>
@@ -1259,6 +1610,7 @@ function App({ store }) {
               <div class="info-item"><div class="k lbl">Hora</div><div class="v">${game.kickoff}</div></div>
               <div class="info-item"><div class="k lbl">Vagas</div><div class="v">${slots}</div></div>
               <div class="info-item"><div class="k lbl">Valor</div><div class="v">${eur(price)}</div></div>
+              <div class="info-item"><div class="k lbl">Mensalidade</div><div class="v">${eur(priceMensal)}</div></div>
               <div class="info-item"><div class="k lbl">Status</div><div class="v">${lotado ? "Lotado" : "Aberto"}</div></div>
             </div>
           </div>`}
