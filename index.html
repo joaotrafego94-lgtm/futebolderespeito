@@ -130,6 +130,13 @@ label{display:block;color:var(--bg);margin-bottom:6px}
 .info-item .k{color:var(--faint)}
 .info-item .v{font-size:14px;font-weight:600;margin-top:3px;letter-spacing:-.01em}
 
+/* ---------- dados do IBAN (mensalista) ---------- */
+.iban-box{background:var(--soft);border-radius:var(--r-md);padding:var(--s3)}
+.iban-row{display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2)}
+.iban-row+.iban-row{margin-top:var(--s2)}
+.iban-row .k{color:var(--faint)}
+.iban-row .v{font-size:14px;font-weight:600;letter-spacing:-.01em;text-align:right}
+
 /* ---------- sua vaga ---------- */
 .me-in{display:flex;align-items:center;gap:var(--s3)}
 .me-badge{width:48px;height:48px;border-radius:var(--r-md);background:var(--bg);color:var(--gold);
@@ -294,6 +301,10 @@ const SUPABASE_ANON_KEY = "sb_publishable_Qmj4oO4GqM_nA6OxjFqnOA_C67pKCZ0";
 
 const MAPS_LINK = "https://maps.app.goo.gl/aCSuyV77kXDmsYV47?g_st=ic";
 const CAMPO = "Ver o campo no mapa";
+// Mensalista paga por transferência, fora do Stripe — o organizador
+// confirma na mão (ver aba Mensalistas).
+const IBAN_MENSALISTA = "BE86905960711750";
+const BENEFICIARIO_MENSALISTA = "Vinicius Santos";
 // Edge Functions do Supabase — confirmam pagamento de verdade via
 // Stripe (ver supabase/functions/). SUPABASE_URL já vem de cima.
 const EDGE_BASE = `${SUPABASE_URL}/functions/v1`;
@@ -449,7 +460,7 @@ function localStore() {
     async confirmPresenceByToken(date, token) {
       const s = read();
       const m = (s.members || []).find((x) => x.token === token);
-      if (!m || m.valid_until < today()) return null;
+      if (!m || !m.valid_until || m.valid_until < today()) return null;
       const key = m.name.trim().toLowerCase();
       let row = (s.players || []).find((p) => p.name.trim().toLowerCase() === key);
       if (!row) {
@@ -471,23 +482,21 @@ function localStore() {
       write(s);
       return m.id;
     },
-    // Modo local não tem Stripe de verdade — "virar mensalista" cria
-    // ou renova o member direto, sem pagamento nenhum (igual todo o
-    // resto do modo local, que já não tem gate de pagamento real).
-    async becomeMemberLocally(name, token) {
+    // Marca como pendente pro organizador confirmar — igual ao real,
+    // não ativa nada sozinho mesmo em modo local.
+    async reportarPagamentoMensal(name, token) {
       const s = read();
       const key = name.trim().toLowerCase();
       let m = (s.members || []).find((x) => x.name.trim().toLowerCase() === key);
-      const base = m && m.valid_until > today() ? m.valid_until : today();
-      const valid_until = addOneMonth(base);
+      if (m && m.token && m.token !== token) return null;
       if (m) {
-        s.members = s.members.map((x) => (x.id === m.id ? { ...x, token, valid_until } : x));
+        s.members = s.members.map((x) => (x.id === m.id ? { ...x, token, pending_since: new Date().toISOString() } : x));
       } else {
-        m = { id: `m${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name, token, valid_until };
+        m = { id: `m${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name, token, valid_until: null, pending_since: new Date().toISOString() };
         s.members = [...(s.members || []), m];
       }
       write(s);
-      return m;
+      return m.id;
     },
     subscribe() { return () => {}; },
     // No modo local (sem Supabase) é um telemóvel só: quem abre já
@@ -515,7 +524,7 @@ function localStore() {
       const s = read();
       const key = name.trim().toLowerCase();
       if ((s.members || []).some((m) => m.name.trim().toLowerCase() === key)) return null;
-      const row = { id: `m${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name, token: null, valid_until: validUntil || today() };
+      const row = { id: `m${Date.now()}${Math.random().toString(16).slice(2, 6)}`, name, token: null, valid_until: validUntil || today(), pending_since: null };
       s.members = [...(s.members || []), row];
       write(s);
       return row;
@@ -524,7 +533,7 @@ function localStore() {
       const s = read();
       const base = currentValidUntil > today() ? currentValidUntil : today();
       const valid_until = addOneMonth(base);
-      s.members = (s.members || []).map((m) => (m.id === id ? { ...m, valid_until } : m));
+      s.members = (s.members || []).map((m) => (m.id === id ? { ...m, valid_until, pending_since: null } : m));
       write(s);
       return valid_until;
     },
@@ -626,6 +635,13 @@ async function remoteStore() {
       if (error) { console.error(error); return null; }
       return data;
     },
+    // Reporta transferência pro IBAN — fica pendente até o
+    // organizador confirmar (adminRenewMember faz isso também).
+    async reportarPagamentoMensal(name, token) {
+      const { data, error } = await sb.rpc("reportar_pagamento_mensal", { p_name: name, p_token: token });
+      if (error) { console.error(error); return null; }
+      return data;
+    },
     // Sem conta: entra pela função join_game, que dá um token — é esse
     // token que depois prova, sem senha nenhuma, que o próprio celular
     // pode tirar essa vaga de volta.
@@ -676,15 +692,17 @@ async function remoteStore() {
     // (claimMembership). Só funciona logado (RLS).
     async adminAddMember(name, validUntil) {
       const { data, error } = await sb.from("members")
-        .insert({ name, valid_until: validUntil || today() })
+        .insert({ name, valid_until: validUntil || today(), pending_since: null })
         .select().single();
       if (error) { console.error(error); return null; }
       return data;
     },
+    // Também serve pra confirmar um pagamento pendente (a mesma ação:
+    // estende a validade e limpa pending_since).
     async adminRenewMember(id, currentValidUntil) {
       const base = currentValidUntil > today() ? currentValidUntil : today();
       const valid_until = addOneMonth(base);
-      const { error } = await sb.from("members").update({ valid_until, updated_at: new Date().toISOString() }).eq("id", id);
+      const { error } = await sb.from("members").update({ valid_until, pending_since: null, updated_at: new Date().toISOString() }).eq("id", id);
       if (error) { console.error(error); return null; }
       return valid_until;
     },
@@ -823,6 +841,9 @@ function App({ store }) {
   const [nome, setNome] = useState("");
   const [admNome, setAdmNome] = useState("");
   const [novoMensalista, setNovoMensalista] = useState("");
+  const [aba, setAba] = useState("jogo"); // "jogo" | "mensalistas"
+  const [nomeMens, setNomeMens] = useState("");
+  const [stepMens, setStepMens] = useState("nome"); // "nome" | "iban" — fluxo da aba Mensalistas
   const [step, setStep] = useState("nome"); // "nome" | "pagamento" — fluxo de Sua Vaga
   const [rolling, setRolling] = useState(false);
   const rollingRef = useRef(false);
@@ -899,7 +920,7 @@ function App({ store }) {
         });
         const data = await resp.json();
         if (data.ok) {
-          say(data.plan === "mensal" ? "Mensalidade confirmada! Você já está na lista." : "Pagamento confirmado! Você já está na lista.");
+          say("Pagamento confirmado! Você já está na lista.");
           // Se foi este aparelho que iniciou uma entrada nova (não um
           // "Pagar agora" na vaga de outra pessoa), reconhece a vaga
           // como "sua vaga" aqui.
@@ -909,12 +930,6 @@ function App({ store }) {
             const novo = { id: data.player_id, name: pendente.name, token: pendente.token };
             localStorage.setItem(ME_KEY, JSON.stringify(novo));
             setMe(novo);
-            if (pendente.plan === "mensal") {
-              const mensalista = { token: pendente.token, name: pendente.name };
-              localStorage.setItem(MEMBER_KEY, JSON.stringify(mensalista));
-              setMeuMensalista(mensalista);
-              store.members().then(setMembers);
-            }
           }
           localStorage.removeItem(STRIPE_PENDING_KEY);
         } else {
@@ -1053,7 +1068,7 @@ function App({ store }) {
   // bater, a pessoa pula direto pra "confirmar presença", sem pagar.
   function mensalistaAtivo(n) {
     const key = n.trim().toLowerCase();
-    return members.find((m) => m.token && m.name.trim().toLowerCase() === key && m.valid_until >= today());
+    return members.find((m) => m.token && m.name.trim().toLowerCase() === key && m.valid_until && m.valid_until >= today());
   }
   // Mensalista cadastrado pelo organizador (pagou por fora), ainda sem
   // aparelho vinculado — a pessoa pode reivindicar digitando o nome.
@@ -1062,42 +1077,21 @@ function App({ store }) {
     return members.find((m) => !m.token && m.name.trim().toLowerCase() === key);
   }
   const meuMembro = meuMensalista ? members.find((m) => m.token === meuMensalista.token) : null;
-  const mensalidadeVencendo = meuMembro && daysAway(meuMembro.valid_until) <= 5;
+  const meuAtivo = meuMembro && meuMembro.valid_until && meuMembro.valid_until >= today();
+  const meuPendente = meuMembro && !!meuMembro.pending_since;
+  const mensalidadeVencendo = meuAtivo && !meuPendente && daysAway(meuMembro.valid_until) <= 5;
 
   // Sem Supabase (modo local, um telemóvel só): não há pagamento de
   // verdade, então entra direto, como sempre — o organizador (o
   // próprio dono do telemóvel) confirma manualmente.
-  // overrides.token existe só na renovação (reaproveita o token já
-  // vinculado, pra somar 1 mês na mesma mensalidade em vez de criar
-  // outra) — no primeiro pagamento como mensalista, nasce um token novo.
-  async function pagarComStripe(plan = "avulso", overrides = {}) {
-    const n = (overrides.name || nome).trim();
+  async function pagarComStripe() {
+    const n = nome.trim();
     if (!n || busy || stripeBusy) return;
-    // Lotado bloqueia entrada nova avulsa — mensalista já pagou o mês,
-    // continua conseguindo confirmar (entra como reserva se passar das
-    // vagas, igual sempre funcionou pra quem paga primeiro).
-    if (plan === "avulso" && lotado) return say("Já não há vagas — nem como reserva, não sobrou lugar nenhum.");
+    if (lotado) return say("Já não há vagas — nem como reserva, não sobrou lugar nenhum.");
 
     if (!store.live) {
       setBusy(true);
-      const tok = overrides.token || uuid();
-      if (plan === "mensal") {
-        await store.becomeMemberLocally(n, tok);
-        const row = await store.confirmPresenceByToken(game.game_date, tok);
-        setBusy(false);
-        if (!row) return say("Não deu pra virar mensalista");
-        const mensalista = { token: tok, name: n };
-        localStorage.setItem(MEMBER_KEY, JSON.stringify(mensalista));
-        setMeuMensalista(mensalista);
-        const novo = { id: row.id, name: row.name, token: tok };
-        localStorage.setItem(ME_KEY, JSON.stringify(novo));
-        setMe(novo);
-        setNome("");
-        setStep("nome");
-        setPlayers((p) => (p.some((x) => x.id === row.id) ? p.map((x) => (x.id === row.id ? row : x)) : [...p, row]));
-        store.members().then(setMembers);
-        return say(overrides.token ? "Mensalidade renovada!" : `${n} agora é mensalista!`);
-      }
+      const tok = uuid();
       const duplicado = jaExiste(n);
       const row = await store.addPlayer(game.game_date, n, tok);
       setBusy(false);
@@ -1111,18 +1105,17 @@ function App({ store }) {
       return say(duplicado ? `Já tem um ${n} na lista — de olho pra não confundir` : "Falta o organizador confirmar seu pagamento");
     }
 
-    // Com Supabase: a vaga NÃO é criada agora (avulso), nem o mês
-    // contado (mensal) — só depois que o Stripe confirmar o pagamento
-    // (stripe-verify-session / stripe-webhook). Quem desiste no meio do
-    // caminho não deixa nome nenhum na lista, nem mensalidade cobrada.
+    // Com Supabase: a vaga NÃO é criada agora. Só nasce depois que o
+    // Stripe confirmar o pagamento (stripe-verify-session) — quem
+    // desiste no meio do caminho não deixa nome nenhum na lista.
     setStripeBusy(true);
-    const tok = overrides.token || uuid();
+    const tok = uuid();
     try {
-      localStorage.setItem(STRIPE_PENDING_KEY, JSON.stringify({ name: n, token: tok, plan }));
+      localStorage.setItem(STRIPE_PENDING_KEY, JSON.stringify({ name: n, token: tok }));
       const resp = await fetch(`${EDGE_BASE}/stripe-create-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
-        body: JSON.stringify({ name: n, game_date: game.game_date, token: tok, plan }),
+        body: JSON.stringify({ name: n, game_date: game.game_date, token: tok }),
       });
       const data = await resp.json();
       if (!resp.ok || !data.url) { setStripeBusy(false); return say(data.error || "Não deu pra abrir o pagamento"); }
@@ -1134,11 +1127,11 @@ function App({ store }) {
     }
   }
 
-  // Só pra mensalista cadastrado pelo organizador (pagou por fora,
-  // sem token ainda) — a pessoa digita o próprio nome uma vez pra
-  // vincular este aparelho, sem passar pelo Stripe.
+  // Só pra mensalista cadastrado pelo organizador (já confirmado,
+  // pagou por fora na hora, sem token ainda) — a pessoa digita o
+  // próprio nome uma vez pra vincular este aparelho.
   async function reivindicarMensalidade() {
-    const n = nome.trim();
+    const n = nomeMens.trim();
     if (!n || busy) return;
     setBusy(true);
     const tok = uuid();
@@ -1150,10 +1143,32 @@ function App({ store }) {
     const mensalista = { token: tok, name: n };
     localStorage.setItem(MEMBER_KEY, JSON.stringify(mensalista));
     setMeuMensalista(mensalista);
-    setNome("");
-    setStep("nome");
+    setNomeMens("");
+    setStepMens("nome");
     store.members().then(setMembers);
     say(`Vinculado! Toca em "Vou jogar esse domingo" quando quiser confirmar.`);
+  }
+
+  // Depois de ver os dados do IBAN e transferir de verdade, a pessoa
+  // toca aqui pra avisar. NÃO ativa nada sozinho — vira pendente até
+  // o organizador confirmar que o dinheiro caiu (aba Mensalistas).
+  // tokenOverride existe só na renovação: reaproveita o token já
+  // vinculado, pra não perder o vínculo com o aparelho.
+  async function reportarPagamentoMensal(nomeOverride, tokenOverride) {
+    const n = (nomeOverride || nomeMens).trim();
+    if (!n || busy) return;
+    setBusy(true);
+    const tok = tokenOverride || uuid();
+    const id = await store.reportarPagamentoMensal(n, tok);
+    setBusy(false);
+    if (!id) return say("Não deu pra reportar — fala com o organizador");
+    const mensalista = { token: tok, name: n };
+    localStorage.setItem(MEMBER_KEY, JSON.stringify(mensalista));
+    setMeuMensalista(mensalista);
+    setNomeMens("");
+    setStepMens("nome");
+    store.members().then(setMembers);
+    say("Reportado! O organizador confirma assim que ver o pagamento.");
   }
 
   // Botão "Pagar agora" numa vaga já pendente (ex.: alguém adicionado
@@ -1267,8 +1282,8 @@ function App({ store }) {
   async function renovarMensalista(m) {
     const valid_until = await store.adminRenewMember(m.id, m.valid_until);
     if (!valid_until) return say("Não deu pra renovar");
-    setMembers((l) => l.map((x) => (x.id === m.id ? { ...x, valid_until } : x)));
-    say(`Renovado até ${fmt(valid_until, { day: "numeric", month: "short" })}`);
+    setMembers((l) => l.map((x) => (x.id === m.id ? { ...x, valid_until, pending_since: null } : x)));
+    say(`Confirmado até ${fmt(valid_until, { day: "numeric", month: "short" })}`);
   }
 
   async function removerMensalista(m) {
@@ -1356,7 +1371,14 @@ function App({ store }) {
         (instruções no README).
       </div>`}
 
-      <div class="hero">
+      <div class="inline">
+        <button class=${`btn btn-s ${aba === "jogo" ? "btn-1" : "btn-g"}`} style="flex:1" onClick=${() => setAba("jogo")}>Jogo</button>
+        <button class=${`btn btn-s ${aba === "mensalistas" ? "btn-1" : "btn-g"}`} style="flex:1" onClick=${() => setAba("mensalistas")}>
+          Mensalistas${meuPendente ? " ·" : ""}${meuPendente ? html`<i style="color:var(--gold-deep)"> pendente</i>` : ""}
+        </button>
+      </div>
+
+      ${aba === "jogo" && html`<div class="hero">
         <${Pitch} />
         <div class="hero-in">
           <div class="brand"><${Crest} /><b>Futebol de Respeito</b></div>
@@ -1375,33 +1397,15 @@ function App({ store }) {
             ${reservas.length ? html`<span class="pill">+${reservas.length} ${reservas.length === 1 ? "reserva" : "reservas"}</span>` : null}
           </div>
         </div>
-      </div>
+      </div>`}
 
-      ${myRow && !myRow.paid && html`
+      ${aba === "jogo" && myRow && !myRow.paid && html`
         <div class="pay-alert">
           <div class="pa-head">⚠️ Paga logo, camarada</div>
           <div class="pa-body">${avisoPagamento(game.game_date).corpo}</div>
         </div>`}
 
-      ${mensalidadeVencendo && (() => {
-        const n = daysAway(meuMembro.valid_until);
-        const quando = n < 0 ? "vencida" : n === 0 ? "vence hoje" : n === 1 ? "vence amanhã" : `vence em ${n} dias`;
-        return html`
-          <div class="pay-alert">
-            <div class="pa-head">⚠️ Mensalidade ${n < 0 ? "vencida" : "vencendo"}</div>
-            <div class="pa-body">
-              ${n < 0
-                ? "Sua mensalidade venceu. Renove pra continuar entrando sem pagar toda semana."
-                : `Sua mensalidade ${quando}. Renove pra não perder o mês.`}
-            </div>
-            <button class="btn btn-1 btn-s" style="margin-top:10px" disabled=${busy || stripeBusy}
-              onClick=${() => pagarComStripe("mensal", { name: meuMembro.name, token: meuMembro.token })}>
-              ${busy || stripeBusy ? "Abrindo…" : `Renovar · ${eur(priceMensal)}`}
-            </button>
-          </div>`;
-      })()}
-
-      <div class="card">
+      ${aba === "jogo" && html`<div class="card">
         ${myRow
           ? html`<div class="me-in">
               <div class="me-badge disp">${initials(myRow.name)}</div>
@@ -1412,7 +1416,7 @@ function App({ store }) {
                   : html`<span>${myRow.source === "mensalista" ? "Mensalista · " : ""}${souReserva ? `Reserva · ${myPaidIdx - slots + 1}º da fila · entra se alguém sair` : `Confirmado · ${myPaidIdx + 1}º · vaga garantida`}</span>`}
               </div>
             </div>`
-          : meuMembro && meuMembro.valid_until >= today()
+          : meuAtivo
             ? html`<div>
                 <div class="card-t lbl" style="margin-bottom:6px">Sua vaga</div>
                 <div class="empty" style="padding:0 0 12px;text-align:left">
@@ -1421,6 +1425,13 @@ function App({ store }) {
                 <button class="btn btn-1" disabled=${busy} onClick=${confirmarPresencaMensal}>
                   ${busy ? "Confirmando…" : "Vou jogar esse domingo"}
                 </button>
+              </div>`
+          : meuPendente
+            ? html`<div>
+                <div class="card-t lbl" style="margin-bottom:6px">Sua vaga</div>
+                <div class="empty" style="padding:0;text-align:left">
+                  Sua mensalidade está aguardando o organizador confirmar o pagamento — vê os detalhes na aba <b>Mensalistas</b>.
+                </div>
               </div>`
           : lotado
             ? html`<div>
@@ -1440,55 +1451,23 @@ function App({ store }) {
                     onClick=${() => setStep("pagamento")}>Continuar</button>
                 </div>
               </div>`
-            : (() => {
-                const reivindicar = mensalistaParaReivindicar(nome);
-                const jaMensalista = !reivindicar && mensalistaAtivo(nome);
-                if (reivindicar) {
-                  return html`<div>
-                    <div class="card-t lbl" style="margin-bottom:4px">${nome.trim()} é mensalista</div>
-                    <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
-                      Alguém já pagou essa mensalidade por fora. Toca no botão pra vincular este aparelho — só precisa fazer isso uma vez.
-                    </div>
-                    <div class="inline">
-                      <button class="btn btn-g btn-s" onClick=${() => setStep("nome")}>Voltar</button>
-                      <button class="btn btn-1" disabled=${busy} onClick=${reivindicarMensalidade}>
-                        ${busy ? "Vinculando…" : "Sou eu, confirmar neste aparelho"}
-                      </button>
-                    </div>
-                  </div>`;
-                }
-                if (jaMensalista) {
-                  return html`<div>
-                    <div class="card-t lbl" style="margin-bottom:4px">${nome.trim()} já é mensalista</div>
-                    <div class="empty" style="padding:0;text-align:left">
-                      Essa mensalidade já está vinculada a outro aparelho. Se for você, abre o app no celular que você usou pra virar mensalista — ou pede pro organizador liberar de novo.
-                    </div>
-                    <div class="inline" style="margin-top:12px">
-                      <button class="btn btn-g btn-s" onClick=${() => setStep("nome")}>Voltar</button>
-                    </div>
-                  </div>`;
-                }
-                return html`<div>
-                  <div class="card-t lbl" style="margin-bottom:4px">${nome.trim()}</div>
-                  <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
-                    ${store.live
-                      ? `Paga a semana ou vira mensalista. A vaga vira real assim que o pagamento for aprovado, sem precisar avisar ninguém.`
-                      : `Sem o Supabase ligado, quem organiza confirma manualmente.`}
-                  </div>
-                  <div class="inline" style="flex-wrap:wrap">
-                    <button class="btn btn-g btn-s" onClick=${() => setStep("nome")}>Voltar</button>
-                    <button class="btn btn-2" disabled=${busy || stripeBusy} onClick=${() => pagarComStripe("avulso")}>
-                      ${busy || stripeBusy ? "Abrindo…" : store.live ? `Avulso · ${eur(price)}` : "Entrar na lista"}
-                    </button>
-                    <button class="btn btn-1" disabled=${busy || stripeBusy} onClick=${() => pagarComStripe("mensal")}>
-                      ${busy || stripeBusy ? "Abrindo…" : store.live ? `Virar mensalista · ${eur(priceMensal)}/mês` : "Virar mensalista"}
-                    </button>
-                  </div>
-                </div>`;
-              })()}
-      </div>
+            : html`<div>
+                <div class="card-t lbl" style="margin-bottom:4px">${nome.trim()}</div>
+                <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
+                  ${store.live
+                    ? `${eur(price)} pra garantir a vaga. Ao clicar você vai pagar — a vaga vira real assim que o pagamento for aprovado, sem precisar avisar ninguém.`
+                    : `${eur(price)} pra garantir a vaga. Sem o Supabase ligado, quem organiza confirma manualmente.`}
+                </div>
+                <div class="inline">
+                  <button class="btn btn-g btn-s" onClick=${() => setStep("nome")}>Voltar</button>
+                  <button class="btn btn-1" disabled=${busy || stripeBusy} onClick=${pagarComStripe}>
+                    ${busy || stripeBusy ? "Abrindo…" : store.live ? `Pagar ${eur(price)}` : "Entrar na lista"}
+                  </button>
+                </div>
+              </div>`}
+      </div>`}
 
-      <div class="card">
+      ${aba === "jogo" && html`<div class="card">
         <div class="card-h">
           <span class="card-t lbl">Confirmados</span>
           <span class="card-n lbl">${titulares.length}/${slots}</span>
@@ -1558,9 +1537,9 @@ function App({ store }) {
                   </div>`)}
               </div>`
             : html`<div class="empty">${isOrganizer ? "Sem sorteio ainda." : "O organizador ainda não sorteou os times."}<br />${titulares.length} jogadores prontos.</div>`}
-      </div>
+      </div>`}
 
-      ${isOrganizer
+      ${aba === "jogo" && (isOrganizer
         ? html`<details class="card editable org">
             <summary class="lbl">Organização</summary>
             <div class="grid2">
@@ -1573,32 +1552,9 @@ function App({ store }) {
                 <input type="number" min="3" value=${slots} onChange=${(e) => salvarOrganizacao({ slots: Math.max(3, parseInt(e.target.value) || 3) })} />
               </div>
             </div>
-            <div class="field">
-              <label class="lbl">Mensalidade</label>
-              <input type="number" min="0" step="0.5" value=${priceMensal} onChange=${(e) => salvarOrganizacao({ price_mensal: Math.max(0, parseFloat(e.target.value) || 0) })} />
-            </div>
             <button class="btn btn-g" style="margin-top:16px" onClick=${abrirProximoDomingo}>
               Abrir o próximo domingo
             </button>
-
-            <div class="card-t lbl" style="margin-top:22px;margin-bottom:10px">Mensalistas</div>
-            ${members.length === 0
-              ? html`<div class="empty" style="padding:0 0 12px">Ninguém ainda.</div>`
-              : members.map((m) => html`
-                  <div class="row sub" key=${m.id}>
-                    <span class="nm">${m.name}<i style=${`color:${m.valid_until >= today() ? "var(--gold-deep)" : "var(--blue)"}`}>${m.valid_until >= today() ? `ATÉ ${fmt(m.valid_until, { day: "numeric", month: "short" })}` : "VENCIDO"}</i></span>
-                    ${!m.token && html`<span class="tag tag-no">Sem aparelho</span>`}
-                    <button class="x ok" onClick=${() => renovarMensalista(m)} aria-label="Renovar 1 mês" title="Renovar 1 mês">↻</button>
-                    ${m.token && html`<button class="x" onClick=${() => liberarMensalista(m)} aria-label="Liberar aparelho" title="Liberar aparelho (trocou de celular)">⟲</button>`}
-                    <button class="x" onClick=${() => removerMensalista(m)} aria-label="Remover mensalista">✕</button>
-                  </div>`)}
-            <div class="inline" style="margin-top:12px">
-              <input value=${novoMensalista} placeholder="Nome de quem pagou por fora"
-                onInput=${(e) => setNovoMensalista(e.target.value)}
-                onKeyDown=${(e) => e.key === "Enter" && adicionarMensalista(novoMensalista)} />
-              <button class="btn btn-g btn-s" style="padding-inline:18px" disabled=${!novoMensalista.trim() || busy}
-                onClick=${() => adicionarMensalista(novoMensalista)}>Add</button>
-            </div>
           </details>`
         : html`<div class="card">
             <div class="card-t lbl" style="margin-bottom:12px">Organização</div>
@@ -1606,14 +1562,132 @@ function App({ store }) {
               <div class="info-item"><div class="k lbl">Hora</div><div class="v">${game.kickoff}</div></div>
               <div class="info-item"><div class="k lbl">Vagas</div><div class="v">${slots}</div></div>
               <div class="info-item"><div class="k lbl">Valor</div><div class="v">${eur(price)}</div></div>
-              <div class="info-item"><div class="k lbl">Mensalidade</div><div class="v">${eur(priceMensal)}</div></div>
               <div class="info-item"><div class="k lbl">Status</div><div class="v">${lotado ? "Lotado" : "Aberto"}</div></div>
             </div>
-          </div>`}
+          </div>`)}
 
-      ${me && html`<button class="btn btn-g" onClick=${() => { localStorage.removeItem(ME_KEY); setMe(null); say("Beleza, esqueci quem você é"); }}>
+      ${aba === "jogo" && me && html`<button class="btn btn-g" onClick=${() => { localStorage.removeItem(ME_KEY); setMe(null); say("Beleza, esqueci quem você é"); }}>
         Não sou mais o ${me.name}
       </button>`}
+
+      ${aba === "mensalistas" && html`<div class="card">
+        <div class="card-t lbl" style="margin-bottom:12px">Sua mensalidade</div>
+        ${meuAtivo
+          ? html`<div class="empty" style="padding:0 0 12px;text-align:left">
+              Mensalista até <b>${fmt(meuMembro.valid_until, { day: "numeric", month: "long" })}</b>${meuPendente ? " · renovação pendente, aguardando o organizador" : ""}.
+            </div>`
+          : meuPendente
+            ? html`<div class="empty" style="padding:0;text-align:left">
+                Pagamento reportado — aguardando o organizador confirmar que o dinheiro caiu.
+              </div>`
+            : null}
+        ${(meuAtivo && !meuPendente && daysAway(meuMembro.valid_until) <= 5) || (meuMembro && !meuAtivo && !meuPendente)
+          ? html`<button class="btn btn-1" style="margin-top:${meuAtivo ? "10px" : "0"}" onClick=${() => setStepMens("iban")}>
+              ${meuAtivo ? `Renovar · ${eur(priceMensal)}` : `Renovar mensalidade · ${eur(priceMensal)}`}
+            </button>`
+          : null}
+
+        ${!meuMensalista
+          ? stepMens === "nome"
+            ? html`<div class="inline" style="margin-top:${meuMembro ? "0" : "0"}">
+                <input value=${nomeMens} placeholder="Seu nome"
+                  onInput=${(e) => setNomeMens(e.target.value)}
+                  onKeyDown=${(e) => e.key === "Enter" && nomeMens.trim() && setStepMens("pagamento")} />
+                <button class="btn btn-1 btn-s" style="padding-inline:20px" disabled=${!nomeMens.trim()}
+                  onClick=${() => setStepMens("pagamento")}>Continuar</button>
+              </div>`
+            : (() => {
+                const reivindicar = mensalistaParaReivindicar(nomeMens);
+                const jaMensalista = !reivindicar && mensalistaAtivo(nomeMens);
+                if (reivindicar) {
+                  return html`<div>
+                    <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
+                      Alguém já pagou a mensalidade de ${nomeMens.trim()} por fora. Toca no botão pra vincular este aparelho — só precisa fazer isso uma vez.
+                    </div>
+                    <div class="inline">
+                      <button class="btn btn-g btn-s" onClick=${() => setStepMens("nome")}>Voltar</button>
+                      <button class="btn btn-1" disabled=${busy} onClick=${reivindicarMensalidade}>
+                        ${busy ? "Vinculando…" : "Sou eu, confirmar neste aparelho"}
+                      </button>
+                    </div>
+                  </div>`;
+                }
+                if (jaMensalista) {
+                  return html`<div>
+                    <div class="empty" style="padding:0;text-align:left">
+                      Essa mensalidade já está vinculada a outro aparelho. Se for você, abre o app no celular que você usou pra virar mensalista — ou pede pro organizador liberar de novo.
+                    </div>
+                    <div class="inline" style="margin-top:12px">
+                      <button class="btn btn-g btn-s" onClick=${() => setStepMens("nome")}>Voltar</button>
+                    </div>
+                  </div>`;
+                }
+                return html`<div>
+                  <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
+                    Transfere ${eur(priceMensal)} pro IBAN abaixo e depois confirma aqui — o organizador libera assim que ver o dinheiro cair.
+                  </div>
+                  <div class="iban-box">
+                    <div class="iban-row"><span class="k lbl">Beneficiário</span><span class="v">${BENEFICIARIO_MENSALISTA}</span></div>
+                    <div class="iban-row"><span class="k lbl">IBAN</span><span class="v">${IBAN_MENSALISTA}</span></div>
+                    <div class="iban-row"><span class="k lbl">Valor</span><span class="v">${eur(priceMensal)}</span></div>
+                  </div>
+                  <div class="inline" style="margin-top:12px">
+                    <button class="btn btn-g btn-s" onClick=${() => copiar(IBAN_MENSALISTA, "IBAN")}>Copiar IBAN</button>
+                    <button class="btn btn-g btn-s" onClick=${() => setStepMens("nome")}>Voltar</button>
+                    <button class="btn btn-1" disabled=${busy} onClick=${() => reportarPagamentoMensal(nomeMens)}>
+                      ${busy ? "Reportando…" : "Já transferi"}
+                    </button>
+                  </div>
+                </div>`;
+              })()
+          : stepMens === "iban"
+            ? html`<div style="margin-top:12px">
+                <div class="empty" style="padding:0 0 12px;text-align:left;font-size:12.5px">
+                  Transfere ${eur(priceMensal)} pro IBAN abaixo e depois confirma aqui.
+                </div>
+                <div class="iban-box">
+                  <div class="iban-row"><span class="k lbl">Beneficiário</span><span class="v">${BENEFICIARIO_MENSALISTA}</span></div>
+                  <div class="iban-row"><span class="k lbl">IBAN</span><span class="v">${IBAN_MENSALISTA}</span></div>
+                  <div class="iban-row"><span class="k lbl">Valor</span><span class="v">${eur(priceMensal)}</span></div>
+                </div>
+                <div class="inline" style="margin-top:12px">
+                  <button class="btn btn-g btn-s" onClick=${() => copiar(IBAN_MENSALISTA, "IBAN")}>Copiar IBAN</button>
+                  <button class="btn btn-g btn-s" onClick=${() => setStepMens("nome")}>Voltar</button>
+                  <button class="btn btn-1" disabled=${busy} onClick=${() => reportarPagamentoMensal(meuMembro.name, meuMembro.token)}>
+                    ${busy ? "Reportando…" : "Já transferi"}
+                  </button>
+                </div>
+              </div>`
+            : null}
+      </div>`}
+
+      ${aba === "mensalistas" && isOrganizer && html`<div class="card">
+        <div class="card-t lbl" style="margin-bottom:10px">Mensalidade</div>
+        <div class="field">
+          <label class="lbl">Valor da mensalidade</label>
+          <input type="number" min="0" step="0.5" value=${priceMensal} onChange=${(e) => salvarOrganizacao({ price_mensal: Math.max(0, parseFloat(e.target.value) || 0) })} />
+        </div>
+
+        <div class="card-t lbl" style="margin-top:22px;margin-bottom:10px">Mensalistas</div>
+        ${members.length === 0
+          ? html`<div class="empty" style="padding:0 0 12px">Ninguém ainda.</div>`
+          : members.map((m) => html`
+              <div class="row sub" key=${m.id}>
+                <span class="nm">${m.name}<i style=${`color:${m.valid_until && m.valid_until >= today() ? "var(--gold-deep)" : "var(--blue)"}`}>${m.valid_until && m.valid_until >= today() ? `ATÉ ${fmt(m.valid_until, { day: "numeric", month: "short" })}` : "VENCIDO"}</i></span>
+                ${m.pending_since && html`<span class="tag tag-no">Pendente</span>`}
+                ${!m.token && html`<span class="tag tag-no">Sem aparelho</span>`}
+                <button class="x ok" onClick=${() => renovarMensalista(m)} aria-label=${m.pending_since ? "Confirmar pagamento" : "Renovar 1 mês"} title=${m.pending_since ? "Confirmar pagamento" : "Renovar 1 mês"}>${m.pending_since ? "✓" : "↻"}</button>
+                ${m.token && html`<button class="x" onClick=${() => liberarMensalista(m)} aria-label="Liberar aparelho" title="Liberar aparelho (trocou de celular)">⟲</button>`}
+                <button class="x" onClick=${() => removerMensalista(m)} aria-label="Remover mensalista">✕</button>
+              </div>`)}
+        <div class="inline" style="margin-top:12px">
+          <input value=${novoMensalista} placeholder="Nome de quem pagou por fora"
+            onInput=${(e) => setNovoMensalista(e.target.value)}
+            onKeyDown=${(e) => e.key === "Enter" && adicionarMensalista(novoMensalista)} />
+          <button class="btn btn-g btn-s" style="padding-inline:18px" disabled=${!novoMensalista.trim() || busy}
+            onClick=${() => adicionarMensalista(novoMensalista)}>Add</button>
+        </div>
+      </div>`}
 
       <div class="foot">
         <span class="status">

@@ -49,82 +49,6 @@ async function assinaturaValida(payload: string, header: string, secret: string)
   return calculada === assinaturaRecebida;
 }
 
-function addOneMonth(isoDate: string): string {
-  const d = new Date(isoDate + "T00:00:00Z");
-  d.setUTCMonth(d.getUTCMonth() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-// Mesma lógica de supabase/functions/stripe-verify-session/index.ts —
-// duplicada de propósito, as duas funções são coladas independentes
-// no painel do Supabase, sem import compartilhado entre elas.
-async function confirmarMensalista(
-  SUPABASE_URL: string,
-  dbHeaders: Record<string, string>,
-  name: string,
-  gameDate: string,
-  token: string
-) {
-  const hoje = new Date().toISOString().slice(0, 10);
-
-  const memberRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/members?token=eq.${token}&select=id,valid_until`,
-    { headers: dbHeaders }
-  );
-  const members = await memberRes.json();
-  const existing = members && members[0];
-  const base = existing && existing.valid_until > hoje ? existing.valid_until : hoje;
-  const validUntil = addOneMonth(base);
-
-  if (existing) {
-    await fetch(`${SUPABASE_URL}/rest/v1/members?id=eq.${existing.id}`, {
-      method: "PATCH",
-      headers: { ...dbHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ valid_until: validUntil, updated_at: new Date().toISOString() }),
-    });
-  } else {
-    await fetch(`${SUPABASE_URL}/rest/v1/members`, {
-      method: "POST",
-      headers: { ...dbHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ name, token, valid_until: validUntil }),
-    });
-  }
-
-  const weekKey = name.trim().toLowerCase();
-  const weekRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/players?game_date=eq.${gameDate}&select=id,name,paid`,
-    { headers: dbHeaders }
-  );
-  const week = await weekRes.json();
-  let player = (week || []).find((p: any) => p.name.trim().toLowerCase() === weekKey);
-
-  if (player && !player.paid) {
-    await fetch(`${SUPABASE_URL}/rest/v1/players?id=eq.${player.id}`, {
-      method: "PATCH",
-      headers: { ...dbHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ paid: true, paid_at: new Date().toISOString(), source: "mensalista" }),
-    });
-  } else if (!player) {
-    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/players`, {
-      method: "POST",
-      headers: { ...dbHeaders, "Content-Type": "application/json", Prefer: "return=representation" },
-      body: JSON.stringify({ game_date: gameDate, name, paid: true, paid_at: new Date().toISOString(), source: "mensalista" }),
-    });
-    const inserted = await insertRes.json();
-    player = inserted && inserted[0];
-  }
-
-  if (player) {
-    await fetch(`${SUPABASE_URL}/rest/v1/player_claims`, {
-      method: "POST",
-      headers: { ...dbHeaders, "Content-Type": "application/json", Prefer: "resolution=ignore-duplicates" },
-      body: JSON.stringify({ player_id: player.id, token }),
-    });
-  }
-
-  return player;
-}
-
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Método não permitido", { status: 405 });
 
@@ -186,12 +110,6 @@ Deno.serve(async (req) => {
   );
   const claims = await claimRes.json();
   if (claims && claims[0]) return new Response("ok (já processado)", { status: 200 });
-
-  if (meta.plan === "mensal") {
-    const player = await confirmarMensalista(SUPABASE_URL, dbHeaders, name, gameDate, token);
-    if (!player) console.error("Webhook: falhou confirmar mensalista");
-    return new Response("ok", { status: 200 });
-  }
 
   const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/players`, {
     method: "POST",

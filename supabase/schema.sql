@@ -80,21 +80,34 @@ create table if not exists player_claims (
 --  jogo), members sobrevive à troca de game_date — "fulano é
 --  mensalista até tal data" precisa persistir mês a mês.
 --
---  token: nasce quando a própria pessoa paga a mensalidade pelo
---  Stripe, ou fica null quando o organizador cadastra alguém que
---  pagou por fora — nesse caso a pessoa "reivindica" o nome uma
---  única vez no próprio celular (claim_membership) e a partir daí
---  o reconhecimento semanal é só por token, nunca mais por nome.
+--  Mensalista paga por transferência pro IBAN, fora do app — não
+--  tem como confirmar isso sozinho, então é sempre em dois passos:
+--  a pessoa "reporta" que pagou (pending_since fica preenchido) e
+--  o organizador confirma na mão (limpa pending_since, estende
+--  valid_until). token: nasce no momento em que a pessoa reporta o
+--  pagamento pela primeira vez, ou fica null quando o organizador
+--  cadastra alguém direto (já confirmado, pagou na hora em dinheiro)
+--  — nesse caso a pessoa "reivindica" o nome uma única vez no
+--  próprio celular (claim_membership). A partir do momento em que
+--  tem token, o reconhecimento semanal é só por token, nunca mais
+--  por nome.
 -- ------------------------------------------------------------
 create table if not exists members (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null,
-  name_key    text generated always as (lower(btrim(name))) stored,
-  token       uuid unique,
-  valid_until date not null,
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  name_key      text generated always as (lower(btrim(name))) stored,
+  token         uuid unique,
+  valid_until   date,
+  pending_since timestamptz,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
 );
+
+-- Versões anteriores deste arquivo exigiam valid_until desde a
+-- criação (pagamento instantâneo via Stripe). Agora nasce sem data,
+-- pendente, até o organizador confirmar a transferência.
+alter table members alter column valid_until drop not null;
+alter table members add column if not exists pending_since timestamptz;
 
 create unique index if not exists members_name_key_uidx on members (name_key);
 
@@ -225,8 +238,8 @@ begin
   if v_nome is null then
     raise exception 'Mensalidade não encontrada';
   end if;
-  if v_valido < current_date then
-    raise exception 'Mensalidade vencida';
+  if v_valido is null or v_valido < current_date then
+    raise exception 'Mensalidade vencida ou ainda não confirmada pelo organizador';
   end if;
   if not exists (select 1 from games where game_date = p_date) then
     raise exception 'Não há jogo aberto nessa data';
@@ -270,10 +283,53 @@ begin
   return v_id;
 end $$;
 
+drop function if exists reportar_pagamento_mensal(text, uuid);
+
+-- A pessoa transferiu pro IBAN e diz "já paguei" — isto NÃO ativa
+-- nada sozinho, só marca como pendente pro organizador confirmar
+-- (ver adminRenewMember/confirmar em index.html). Cobre dois casos:
+-- primeira vez (nome novo) e renovação (nome já existe, com ou sem
+-- token). Se já existir um token de outro aparelho, recusa — só
+-- quem já provou ser o dono (ou o organizador, resetando o vínculo)
+-- pode reportar de novo.
+create function reportar_pagamento_mensal(p_name text, p_token uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id    uuid;
+  v_token uuid;
+  v_key   text := lower(btrim(p_name));
+  v_nome  text := btrim(p_name);
+begin
+  if v_nome = '' or length(v_nome) > 60 then
+    raise exception 'Nome inválido';
+  end if;
+
+  select id, token into v_id, v_token from members where name_key = v_key;
+
+  if v_id is null then
+    insert into members (name, token, pending_since) values (v_nome, p_token, now())
+      returning id into v_id;
+    return v_id;
+  end if;
+
+  if v_token is not null and v_token <> p_token then
+    raise exception 'Esse nome já está vinculado a outro aparelho';
+  end if;
+
+  update members set token = p_token, pending_since = now(), updated_at = now() where id = v_id;
+  return v_id;
+end $$;
+
 revoke all on function confirm_presence_by_token(date, uuid) from public;
 revoke all on function claim_membership(text, uuid)          from public;
+revoke all on function reportar_pagamento_mensal(text, uuid) from public;
 grant execute on function confirm_presence_by_token(date, uuid) to anon, authenticated;
 grant execute on function claim_membership(text, uuid)          to anon, authenticated;
+grant execute on function reportar_pagamento_mensal(text, uuid) to anon, authenticated;
 
 -- ============================================================
 --  TEMPO REAL
