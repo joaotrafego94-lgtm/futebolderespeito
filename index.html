@@ -1046,11 +1046,10 @@ function App({ store }) {
   const pendentes = players.filter((p) => !p.paid);
   const titulares = pagos.slice(0, slots);
   const reservas = pagos.slice(slots);
-  const pct = players.length ? Math.round((pagos.length / players.length) * 100) : 0;
-  // Dinheiro arrecadado NESTA semana — mensalista não soma, já pagou
-  // no mês, confirmar presença de graça não gera receita da semana.
-  const avulsosPagos = pagos.filter((p) => p.source !== "mensalista").length;
-  const avulsosTotal = players.filter((p) => p.source !== "mensalista").length;
+  // "Quem vai no jogo" é a soma de duas listas separadas: quem pagou
+  // essa semana (avulso) e quem já é mensalista e confirmou presença.
+  const titularesMensalistas = titulares.filter((p) => p.source === "mensalista");
+  const titularesAvulso = titulares.filter((p) => p.source !== "mensalista");
   const myRow = me ? players.find((p) => p.id === me.id) : null;
   const myPaidIdx = myRow && myRow.paid ? pagos.findIndex((p) => p.id === me.id) : -1;
   const myPendingIdx = myRow && !myRow.paid ? pendentes.findIndex((p) => p.id === me.id) : -1;
@@ -1080,11 +1079,6 @@ function App({ store }) {
   const meuAtivo = meuMembro && meuMembro.valid_until && meuMembro.valid_until >= today();
   const meuPendente = meuMembro && !!meuMembro.pending_since;
   const mensalidadeVencendo = meuAtivo && !meuPendente && daysAway(meuMembro.valid_until) <= 5;
-  // Saldo de quem já é mensalista confirmado — dinheiro que já entrou
-  // no mês, separado do que os avulsos pagam jogo a jogo.
-  const mensalistasAtivos = members.filter((m) => m.valid_until && m.valid_until >= today());
-  const mensalistasPendentes = members.filter((m) => m.pending_since);
-  const saldoMensal = mensalistasAtivos.length * priceMensal;
 
   // Sem Supabase (modo local, um telemóvel só): não há pagamento de
   // verdade, então entra direto, como sempre — o organizador (o
@@ -1474,14 +1468,19 @@ function App({ store }) {
 
       ${aba === "jogo" && html`<div class="card">
         <div class="card-h">
-          <span class="card-t lbl">Confirmados</span>
+          <span class="card-t lbl">Quem vai no jogo</span>
           <span class="card-n lbl">${titulares.length}/${slots}</span>
         </div>
 
         ${players.length === 0
           ? html`<div class="empty">Ninguém ainda.<br />Seja o primeiro a entrar.</div>`
           : html`
-            <div>${titulares.map((p, i) => Linha(p, i, false))}</div>
+            ${titularesMensalistas.length
+              ? html`<div><div class="sec lbl">Mensalistas confirmados</div>${titularesMensalistas.map((p, i) => Linha(p, i, false))}</div>`
+              : null}
+            ${titularesAvulso.length
+              ? html`<div><div class="sec lbl">Pagamentos semanais</div>${titularesAvulso.map((p, i) => Linha(p, i, false))}</div>`
+              : null}
             ${reservas.length
               ? html`<div><div class="sec lbl">Reservas</div>${reservas.map((p, i) => Linha(p, i, true))}</div>`
               : null}
@@ -1509,18 +1508,6 @@ function App({ store }) {
           <button class="btn btn-2" style="margin-top:8px" onClick=${() => copiar(textoWhatsApp(), "Lista")}>
             Copiar lista pro WhatsApp
           </button>`}
-      </div>
-
-      <div class="card">
-        <div class="card-t lbl" style="margin-bottom:10px">Arrecadado essa semana · avulso</div>
-        <div class="money">
-          <div>
-            <div class="big disp">${eur(avulsosPagos * price)}</div>
-            <div class="cap">de ${eur(avulsosTotal * price)} · ${eur(price)} cada</div>
-          </div>
-          <div class="side"><b>${avulsosPagos}/${avulsosTotal}</b>pagaram</div>
-        </div>
-        <div class="bar"><i style=${`width:${pct}%`}></i></div>
       </div>
 
       <div class="card">
@@ -1665,17 +1652,6 @@ function App({ store }) {
                 </div>
               </div>`
             : null}
-      </div>`}
-
-      ${aba === "mensalistas" && members.length > 0 && html`<div class="card">
-        <div class="card-t lbl" style="margin-bottom:10px">Saldo dos mensalistas</div>
-        <div class="money">
-          <div>
-            <div class="big disp">${eur(saldoMensal)}</div>
-            <div class="cap">${mensalistasAtivos.length} ${mensalistasAtivos.length === 1 ? "mensalista ativo" : "mensalistas ativos"} · ${eur(priceMensal)} cada</div>
-          </div>
-          ${mensalistasPendentes.length > 0 && html`<div class="side"><b>${mensalistasPendentes.length}</b>${mensalistasPendentes.length === 1 ? "pendente" : "pendentes"}</div>`}
-        </div>
       </div>`}
 
       ${aba === "mensalistas" && isOrganizer && html`<div class="card">
